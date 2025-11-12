@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+*.log
+*.sqlite3
+
+# Frontend
+node_modules/
+dist/
+build/
+.env*
+
+# Uploads
+backend/uploads/
+
+# Tests
+backend/tests/
+
+.pytest_cache/
