@@ -1,6 +1,6 @@
 # CryptoCloud - Backend
 
-A simple and secure file storage application with client-side encryption. This README focuses on the backend API.
+A secure file storage application with client-side encryption. This README focuses on the backend API.
 
 ## About The Project
 
