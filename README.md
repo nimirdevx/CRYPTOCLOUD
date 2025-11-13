@@ -111,7 +111,9 @@ The frontend has been enhanced with modern design patterns:
 ### Backend
 
 - **FastAPI:** High-performance Python web framework
-- **SQLite:** Lightweight database for user and file metadata
+- **MongoDB:** Used as the primary database (with `motor`) to store user and file metadata
+- **AWS S3:** Used for scalable, secure object storage for all encrypted files
+- **Boto3:** The AWS SDK for Python, used to generate presigned URLs for S3
 - **Pydantic:** Data validation and settings management
 - **PyJWT:** JSON Web Token implementation
 - **PyOTP:** Two-factor authentication (TOTP)
