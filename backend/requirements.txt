@@ -8,3 +8,4 @@ pyjwt
 pycryptodome
 aiofiles
 python-multipart
+boto3
