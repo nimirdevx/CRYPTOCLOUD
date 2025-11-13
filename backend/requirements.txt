@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pydantic
+pydantic-settings
+motor
+passlib[bcrypt]
+pyjwt
+pycryptodome
+aiofiles
+python-multipart
