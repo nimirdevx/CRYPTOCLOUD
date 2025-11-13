@@ -26,6 +26,9 @@ class User(BaseModel):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
     username: str
     hashed_password: str
+    
+    is_2fa_enabled: bool = Field(default=False)
+    totp_secret: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -35,3 +38,4 @@ class User(BaseModel):
 class UserResponse(BaseModel):
     id: str
     username: str
+    is_2fa_enabled: bool

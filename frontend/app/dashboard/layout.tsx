@@ -1,27 +1,45 @@
-"use client"; // This layout *must* be a client component to check auth state
+"use client";
 
 import React, { useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "next/navigation";
+import PasswordPrompt from "../components/PasswordPrompt";
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { jwt, encryptionKey } = useAuth();
+  // 1. Get 'isInitialized' from the context
+  const { jwt, encryptionKey, isInitialized } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    // This is the gatekeeper logic
-    if (!jwt || !encryptionKey) {
+    // 2. Wait for the context to be ready
+    if (!isInitialized) {
+      return; // Do nothing until auth is loaded
+    }
+
+    // 3. Now we can safely check for the JWT
+    if (!jwt) {
       router.push("/auth/login");
     }
-  }, [jwt, encryptionKey, router]);
+  }, [jwt, isInitialized, router]); // 4. Add 'isInitialized' to dependencies
 
-  // If the user is not authenticated, show a loading state
-  // while the redirect happens.
-  if (!jwt || !encryptionKey) {
+  // --- This is the new render logic ---
+
+  // 1. Show a loading screen while context is initializing
+  if (!isInitialized) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-xl">Initializing Session...</p>
+      </div>
+    );
+  }
+
+  // 2. Auth is loaded, but user is not logged in.
+  // This state is brief, as the useEffect above will redirect.
+  if (!jwt) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <p className="text-xl">Redirecting to login...</p>
@@ -29,6 +47,17 @@ export default function DashboardLayout({
     );
   }
 
-  // If authenticated, show the dashboard page
+  // 3. User is logged in (has JWT) but app is LOCKED (no key)
+  if (jwt && !encryptionKey) {
+    return (
+      <>
+        <PasswordPrompt />
+        {/* Blur the background app for security and UX */}
+        <div className="blur-sm grayscale pointer-events-none">{children}</div>
+      </>
+    );
+  }
+
+  // 4. User is logged in AND unlocked!
   return <>{children}</>;
 }
