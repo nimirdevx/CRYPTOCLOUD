@@ -67,9 +67,29 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), users: AsyncIO
     # --- THIS LOGIC WAS MISSING ---
     # Find the user in the database
     user_doc = await users.find_one({"username": form_data.username})
+    
+    # Debug logging
+    print(f"[DEBUG] Login attempt for username: {form_data.username}")
+    print(f"[DEBUG] User found in DB: {user_doc is not None}")
+    if user_doc:
+        print(f"[DEBUG] User has 2FA enabled: {user_doc.get('is_2fa_enabled', False)}")
+        print(f"[DEBUG] Password length: {len(form_data.password)}")
+        print(f"[DEBUG] Hashed password exists: {bool(user_doc.get('hashed_password'))}")
 
     # Verify their password
-    if not user_doc or not verify_password(form_data.password, user_doc["hashed_password"]):
+    if not user_doc:
+        print(f"[DEBUG] User not found")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    password_valid = verify_password(form_data.password, user_doc["hashed_password"])
+    print(f"[DEBUG] Password verification result: {password_valid}")
+    
+    if not password_valid:
+        print(f"[DEBUG] Authentication failed - Invalid password")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -103,9 +123,29 @@ async def login_2fa(request: TwoFaLoginRequest, users: AsyncIOMotorCollection = 
     This is the new login route for users who have 2FA enabled.
     """
     user_doc = await users.find_one({"username": request.username})
+    
+    # Debug logging
+    print(f"[DEBUG] 2FA Login attempt for username: {request.username}")
+    print(f"[DEBUG] User found in DB: {user_doc is not None}")
+    if user_doc:
+        print(f"[DEBUG] User has 2FA enabled: {user_doc.get('is_2fa_enabled', False)}")
+        print(f"[DEBUG] User has TOTP secret: {user_doc.get('totp_secret') is not None}")
+        print(f"[DEBUG] Password length: {len(request.password)}")
+        print(f"[DEBUG] Hashed password exists: {bool(user_doc.get('hashed_password'))}")
 
     # 1. Verify password
-    if not user_doc or not verify_password(request.password, user_doc["hashed_password"]):
+    if not user_doc:
+        print(f"[DEBUG] User not found")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+        )
+    
+    password_valid = verify_password(request.password, user_doc["hashed_password"])
+    print(f"[DEBUG] Password verification result: {password_valid}")
+    
+    if not password_valid:
+        print(f"[DEBUG] 2FA Authentication failed - Invalid password")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -113,13 +153,21 @@ async def login_2fa(request: TwoFaLoginRequest, users: AsyncIOMotorCollection = 
 
     # 2. Verify 2FA code
     if not user_doc.get("is_2fa_enabled") or not user_doc.get("totp_secret"):
+         print(f"[DEBUG] 2FA not properly configured for user")
          raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="2FA is not enabled for this account",
         )
         
     totp = pyotp.TOTP(user_doc["totp_secret"])
-    if not totp.verify(request.totp_code):
+    print(f"[DEBUG] TOTP code received: {request.totp_code}")
+    print(f"[DEBUG] TOTP code length: {len(request.totp_code)}")
+    
+    totp_valid = totp.verify(request.totp_code)
+    print(f"[DEBUG] TOTP verification result: {totp_valid}")
+    
+    if not totp_valid:
+        print(f"[DEBUG] Invalid 2FA code")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid 2FA code",
