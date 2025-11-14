@@ -23,6 +23,7 @@ class FileMetadata(BaseModel):
     owner_id: PyObjectId
     upload_time: datetime = Field(default_factory=datetime.utcnow)
     file_path: str
+    file_size: int
 
     class Config:
         from_attributes = True
@@ -34,3 +35,4 @@ class FileMetadataResponse(BaseModel):
     filename: str
     owner_id: str
     upload_time: str
+    file_size: int

@@ -33,9 +33,13 @@ class UploadResponse(BaseModel):
 class FinalizeRequest(BaseModel):
     filename: str
     s3_key: str
+    file_size: int
 
 class DownloadResponse(BaseModel):
     download_url: str
+
+class RenameRequest(BaseModel):
+    new_filename: str
 
 # --- NEW: REQUEST UPLOAD URL ---
 @router.post("/request-upload-url", response_model=UploadResponse)
@@ -80,7 +84,8 @@ async def finalize_upload(
         "filename": request.filename,
         "owner_id": current_user.id,
         "file_path": request.s3_key,  # We reuse 'file_path' to store the S3 key
-        "upload_time": datetime.utcnow()
+        "upload_time": datetime.utcnow(),
+        "file_size": request.file_size
     }
     
     new_file = await files.insert_one(file_metadata)
@@ -90,7 +95,8 @@ async def finalize_upload(
         id=str(created_file["_id"]),
         filename=created_file["filename"],
         owner_id=str(created_file["owner_id"]),
-        upload_time=created_file["upload_time"].isoformat()
+        upload_time=created_file["upload_time"].isoformat(),
+        file_size=created_file["file_size"]
     )
 
 # --- UNCHANGED: LIST FILES ---
@@ -109,7 +115,8 @@ async def list_files(
                 id=str(f["_id"]),
                 filename=f["filename"],
                 owner_id=str(f["owner_id"]),
-                upload_time=f["upload_time"].isoformat()
+                upload_time=f["upload_time"].isoformat(),
+                file_size=f.get("file_size", 0)  # Default to 0 if not present
             )
         )
     return response_list
@@ -153,3 +160,111 @@ async def get_download_url(
         raise HTTPException(status_code=500, detail=f"Could not generate download URL: {e}")
 
     return DownloadResponse(download_url=download_url)
+
+@router.delete("/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_file(
+    file_id: str,
+    current_user: User = Depends(get_current_user),
+    files: AsyncIOMotorCollection = Depends(get_file_collection)
+):
+    """
+    Deletes a file from S3 and its metadata from MongoDB.
+    """
+    from bson import ObjectId
+    try:
+        obj_id = ObjectId(file_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid file ID format")
+
+    # 1. Find the file metadata in the database
+    file_metadata = await files.find_one({"_id": obj_id})
+
+    # 2. Security Check: Ensure the user owns this file
+    if not file_metadata or file_metadata["owner_id"] != current_user.id:
+        raise HTTPException(status_code=404, detail="File not found or access denied")
+
+    s3_key = file_metadata["file_path"] # Get the S3 key
+
+    # 3. Delete the file from S3
+    try:
+        s3_client.delete_object(
+            Bucket=settings.s3_bucket_name,
+            Key=s3_key
+        )
+    except Exception as e:
+        # If S3 fails, we stop. We don't want to delete the metadata
+        # for a file that still exists.
+        raise HTTPException(status_code=500, detail=f"Could not delete file from S3: {e}")
+
+    # 4. Delete the file metadata from MongoDB
+    await files.delete_one({"_id": obj_id})
+    
+    # Return 204 No Content (success)
+    return
+
+class StorageUsageResponse(BaseModel):
+    used: int
+    quota: int
+
+@router.get("/users/me/storage", response_model=StorageUsageResponse)
+async def get_storage_usage(
+    current_user: User = Depends(get_current_user),
+    files: AsyncIOMotorCollection = Depends(get_file_collection)
+):
+    """
+    Calculates the total storage used by the current user.
+    """
+    # Define a user quota (e.g., 5GB)
+    USER_QUOTA_BYTES = 5 * 1024 * 1024 * 1024  # 5 GB
+
+    # Use a MongoDB aggregation pipeline to sum file sizes
+    pipeline = [
+        {"$match": {"owner_id": current_user.id}},
+        {"$group": {"_id": None, "total_usage": {"$sum": "$file_size"}}}
+    ]
+    
+    result = await files.aggregate(pipeline).to_list(length=1)
+    
+    total_usage = 0
+    if result:
+        total_usage = result[0].get("total_usage", 0)
+
+    return StorageUsageResponse(used=total_usage, quota=USER_QUOTA_BYTES)
+
+# --- NEW: RENAME FILE ENDPOINT ---
+@router.patch("/{file_id}", response_model=FileMetadataResponse)
+async def rename_file(
+    file_id: str,
+    request: RenameRequest,
+    current_user: User = Depends(get_current_user),
+    files: AsyncIOMotorCollection = Depends(get_file_collection)
+):
+    from bson import ObjectId
+    try:
+        obj_id = ObjectId(file_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid file ID format")
+
+    # Find the file
+    file_metadata = await files.find_one({"_id": obj_id})
+
+    # Security Check
+    if not file_metadata or file_metadata["owner_id"] != current_user.id:
+        raise HTTPException(status_code=404, detail="File not found or access denied")
+
+    # Perform the update
+    await files.update_one(
+        {"_id": obj_id},
+        {"$set": {"filename": request.new_filename}}
+    )
+
+    # Get the updated document
+    updated_file = await files.find_one({"_id": obj_id})
+
+    return FileMetadataResponse(
+        id=str(updated_file["_id"]),
+        filename=updated_file["filename"],
+        owner_id=str(updated_file["owner_id"]),
+        upload_time=updated_file["upload_time"].isoformat(),
+        file_size=updated_file.get("file_size", 0)
+    )
