@@ -9,7 +9,9 @@ export default function PasswordPrompt() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const { unlock, logout } = useAuth();
+  const { unlock, logout, jwt } = useAuth();     
+
+  const API_URL = "http://127.0.0.1:8000";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,16 +19,31 @@ export default function PasswordPrompt() {
     setError(null);
 
     try {
-      // 1. Re-derive the encryption key
-      const encryptionKey = await deriveKey(password);
+      // --- 3. This is the new verification step ---
+      const response = await fetch(`${API_URL}/auth/verify-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${jwt}` // We are already authenticated
+        },
+        body: JSON.stringify({ password: password })
+      });
 
-      // 2. Save it to the context. We're "unlocked"!
+      if (!response.ok) {
+        // The server (401) will tell us the password was wrong
+        throw new Error('Incorrect password. Please try again.');
+      }
+      // --- End of verification step ---
+
+      // 4. If we reach here, the password was correct!
+      // Now we derive the key, 100% sure it's the right one.
+      const encryptionKey = await deriveKey(password);
+      
+      // 5. Save it to the context. We're "unlocked"!
       unlock(encryptionKey);
 
-      // We can't actually verify if the password was correct until
-      // the user tries to decrypt a file, which is fine.
     } catch (err: any) {
-      setError("Failed to derive key. Please try again.");
+      setError(err.message || "An error occurred.");
     }
     setIsLoading(false);
   };
@@ -46,7 +63,7 @@ export default function PasswordPrompt() {
       >
         {/* Icon Header */}
         <div className="flex flex-col items-center mb-6">
-          <div className="w-20 h-20 bg-linear-to-br from-yellow-500 to-orange-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg animate-pulse-glow">
+          <div className="w-20 h-20 bg-linear-to-br from-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg animate-pulse-glow">
             <svg
               className="w-10 h-10 text-white"
               fill="none"
@@ -70,11 +87,11 @@ export default function PasswordPrompt() {
         </div>
 
         {/* Info Box */}
-        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mb-6">
+        <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-4 mb-6">
           <div className="flex items-start gap-3">
             <div className="shrink-0">
               <svg
-                className="w-5 h-5 text-yellow-400"
+                className="w-5 h-5 text-indigo-400"
                 fill="currentColor"
                 viewBox="0 0 20 20"
               >
@@ -117,7 +134,7 @@ export default function PasswordPrompt() {
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full pl-10 pr-10 p-3 bg-gray-700/50 backdrop-blur-sm rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent text-white placeholder-gray-400 transition-all"
+              className="w-full pl-10 pr-10 p-3 bg-gray-700/50 backdrop-blur-sm rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-gray-400 transition-all"
               placeholder="Enter your password"
               required
               autoFocus
@@ -186,7 +203,7 @@ export default function PasswordPrompt() {
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full p-3 bg-linear-to-r from-yellow-600 to-orange-600 rounded-lg font-semibold text-white hover:from-yellow-700 hover:to-orange-700 transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none shadow-lg hover:shadow-yellow-500/50 flex items-center justify-center gap-2 mb-3"
+          className="w-full p-3 bg-linear-to-r from-indigo-600 to-purple-600 rounded-lg font-semibold text-white hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none shadow-lg hover:shadow-indigo-500/50 flex items-center justify-center gap-2 mb-3"
         >
           {isLoading ? (
             <>

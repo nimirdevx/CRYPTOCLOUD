@@ -30,6 +30,9 @@ class TwoFaLoginRequest(BaseModel):
 class DeleteAccountRequest(BaseModel):
     password: str
     
+class PasswordVerifyRequest(BaseModel):
+    password: str
+    
 # --- S3 Client (for deleting files) ---
 s3_client = boto3.client(
     "s3",
@@ -293,4 +296,30 @@ async def delete_account(
     await users.delete_one({"_id": current_user.id})
     
     # Return 204 No Content (success)
+    return
+
+# --- NEW /auth/verify-password endpoint ---
+@router.post("/verify-password", status_code=status.HTTP_204_NO_CONTENT)
+async def verify_password_for_session(
+    request: PasswordVerifyRequest,
+    current_user: User = Depends(get_current_user),
+    users: AsyncIOMotorCollection = Depends(get_user_collection)
+):
+    """
+    Verifies the user's password to unlock a session.
+    """
+    # 1. We already have the user from the JWT (get_current_user)
+    #    We just need to re-fetch their doc to be 100% sure.
+    user_doc = await users.find_one({"_id": current_user.id})
+
+    # 2. Verify the provided password against the stored hash
+    if not verify_password(request.password, user_doc["hashed_password"]):
+        print(f"[DEBUG] Password verification failed for user: {current_user.username}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect password",
+        )
+    
+    # 3. If it's correct, return 204 No Content (success)
+    print(f"[DEBUG] Password verification successful for user: {current_user.username}")
     return
