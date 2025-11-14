@@ -1,5 +1,6 @@
 interface FileListHeaderProps {
   filesCount: number;
+  foldersCount: number;
   filteredCount: number;
   searchQuery: string;
   isFetchingFiles: boolean;
@@ -9,6 +10,7 @@ interface FileListHeaderProps {
 
 export const FileListHeader = ({
   filesCount,
+  foldersCount,
   filteredCount,
   searchQuery,
   isFetchingFiles,
@@ -36,7 +38,18 @@ export const FileListHeader = ({
         <div>
           <h2 className="text-2xl font-semibold text-white">My Files</h2>
           <p className="text-sm text-gray-400">
-            {filesCount} file{filesCount !== 1 ? "s" : ""} stored
+            {foldersCount > 0 && (
+              <>
+                {foldersCount} folder{foldersCount !== 1 ? "s" : ""}
+                {filesCount > 0 && ", "}
+              </>
+            )}
+            {filesCount > 0 && (
+              <>
+                {filesCount} file{filesCount !== 1 ? "s" : ""}
+              </>
+            )}
+            {filesCount === 0 && foldersCount === 0 && "No items"}
             {searchQuery && ` • ${filteredCount} found`}
           </p>
         </div>

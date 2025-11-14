@@ -23,6 +23,14 @@ interface FileMetadata {
   owner_id: string;
   upload_time: string;
   file_size: number;
+  isFolder: boolean;
+  parentId: string | null;
+}
+
+// Breadcrumb interface
+interface Breadcrumb {
+  id: string | null;
+  name: string;
 }
 
 // Storage quota interface
@@ -38,6 +46,7 @@ export default function DashboardPage() {
   const [files, setFiles] = useState<FileMetadata[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [isFetchingFiles, setIsFetchingFiles] = useState(true);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -51,11 +60,30 @@ export default function DashboardPage() {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewFilename, setPreviewFilename] = useState<string>("");
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [folderPath, setFolderPath] = useState<Breadcrumb[]>([
+    { id: null, name: "Home" },
+  ]);
+  const [loadingFileId, setLoadingFileId] = useState<string | null>(null);
+  const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
 
   // Filter files based on search query
-  const filteredFiles = files.filter((file) =>
-    file.filename.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredFiles = files
+    .filter((file) =>
+      file.filename.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => {
+      // Sort folders first, then files
+      if (a.isFolder && !b.isFolder) return -1;
+      if (!a.isFolder && b.isFolder) return 1;
+      return a.filename.localeCompare(b.filename);
+    });
+
+  // Count folders and files separately
+  const foldersCount = files.filter((file) => file.isFolder).length;
+  const actualFilesCount = files.filter((file) => !file.isFolder).length;
 
   // --- Helper: Authenticated Fetch ---
   const authFetch = (url: string, options: RequestInit = {}) => {
@@ -67,10 +95,16 @@ export default function DashboardPage() {
   };
 
   // --- Unified data fetching function ---
-  const fetchData = async () => {
+  const fetchData = async (folderId: string | null = null) => {
     if (!jwt) return;
     try {
-      const filesResponse = await authFetch(`${API_URL}/files/`);
+      const query = new URLSearchParams();
+      if (folderId) {
+        query.append("parentId", folderId);
+      }
+      const filesResponse = await authFetch(
+        `${API_URL}/files/?${query.toString()}`
+      );
       if (!filesResponse.ok) throw new Error("Failed to fetch files.");
       const filesData: FileMetadata[] = await filesResponse.json();
       setFiles(filesData);
@@ -89,8 +123,8 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    fetchData();
-  }, [jwt]);
+    fetchData(currentFolderId);
+  }, [jwt, currentFolderId]);
 
   // --- Handle File Selection ---
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -106,7 +140,7 @@ export default function DashboardPage() {
       return;
     }
 
-    setIsLoading(true);
+    setIsUploading(true);
     setError(null);
     setUploadProgress(0);
     setMessage("Starting upload...");
@@ -156,6 +190,7 @@ export default function DashboardPage() {
             filename: selectedFile.name,
             s3_key: s3_key,
             file_size: selectedFile.size,
+            parentId: currentFolderId,
           }),
         }
       );
@@ -170,12 +205,12 @@ export default function DashboardPage() {
       ) as HTMLInputElement;
       if (fileInput) fileInput.value = "";
 
-      await fetchData();
+      await fetchData(currentFolderId);
     } catch (err: any) {
       setError(err.message);
       setUploadProgress(0);
     } finally {
-      setIsLoading(false);
+      setIsUploading(false);
       setTimeout(() => {
         setMessage(null);
         setUploadProgress(0);
@@ -190,9 +225,9 @@ export default function DashboardPage() {
       return;
     }
 
-    setIsLoading(true);
+    setLoadingFileId(file.id);
+    setLoadingMessage("Downloading...");
     setError(null);
-    setMessage(`Downloading ${file.filename}...`);
 
     try {
       const response = await authFetch(
@@ -202,13 +237,12 @@ export default function DashboardPage() {
 
       const { download_url } = await response.json();
 
-      setMessage("File downloading...");
+      setLoadingMessage("Decrypting...");
       const s3Response = await fetch(download_url);
       if (!s3Response.ok) throw new Error("File download from S3 failed.");
 
       const encryptedBuffer = await s3Response.arrayBuffer();
 
-      setMessage("Decrypting file...");
       const decryptedBuffer = await decryptData(encryptionKey, encryptedBuffer);
 
       const blob = new Blob([decryptedBuffer]);
@@ -218,12 +252,11 @@ export default function DashboardPage() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
-      setMessage("Download complete!");
     } catch (err: any) {
       setError(err.message);
     } finally {
-      setIsLoading(false);
+      setLoadingFileId(null);
+      setLoadingMessage(null);
     }
   };
 
@@ -234,9 +267,9 @@ export default function DashboardPage() {
       return;
     }
 
-    setIsLoading(true);
+    setLoadingFileId(file.id);
+    setLoadingMessage("Loading preview...");
     setError(null);
-    setMessage(`Loading preview for ${file.filename}...`);
 
     try {
       const response = await authFetch(
@@ -273,11 +306,11 @@ export default function DashboardPage() {
       setPreviewUrl(objectUrl);
       setPreviewFilename(file.filename);
       setShowPreviewModal(true);
-      setMessage(null);
     } catch (err: any) {
       setError(err.message);
     } finally {
-      setIsLoading(false);
+      setLoadingFileId(null);
+      setLoadingMessage(null);
     }
   };
 
@@ -304,7 +337,7 @@ export default function DashboardPage() {
 
       if (response.status === 204) {
         setMessage("File deleted successfully.");
-        await fetchData();
+        await fetchData(currentFolderId);
       } else {
         const data = await response.json();
         throw new Error(data.detail || "Failed to delete file.");
@@ -364,6 +397,54 @@ export default function DashboardPage() {
       setIsLoading(false);
       cancelRename();
     }
+  };
+
+  // --- Handle Create Folder ---
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) {
+      setError("Folder name cannot be empty.");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await authFetch(`${API_URL}/files/folders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newFolderName,
+          parentId: currentFolderId,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || "Failed to create folder.");
+      }
+
+      setMessage("Folder created successfully.");
+      setShowCreateFolderModal(false);
+      setNewFolderName("");
+      await fetchData(currentFolderId);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- Handle Folder Click (Navigation) ---
+  const handleFolderClick = (folder: FileMetadata) => {
+    setCurrentFolderId(folder.id);
+    setFolderPath([...folderPath, { id: folder.id, name: folder.filename }]);
+  };
+
+  // --- Handle Breadcrumb Click ---
+  const handleBreadcrumbClick = (index: number) => {
+    const newPath = folderPath.slice(0, index + 1);
+    setFolderPath(newPath);
+    setCurrentFolderId(newPath[newPath.length - 1].id);
   };
 
   return (
@@ -440,12 +521,13 @@ export default function DashboardPage() {
         {/* Upload Section */}
         <FileUploadSection
           selectedFile={selectedFile}
-          isLoading={isLoading}
+          isLoading={isUploading}
           uploadProgress={uploadProgress}
           message={message}
           error={error}
           onFileChange={handleFileChange}
           onUpload={handleUpload}
+          currentFolderName={folderPath[folderPath.length - 1].name}
         />
 
         {/* File List Section */}
@@ -453,15 +535,73 @@ export default function DashboardPage() {
           className="glass p-6 rounded-2xl shadow-2xl animate-slide-up"
           style={{ animationDelay: "0.1s" }}
         >
+          {/* Breadcrumbs */}
+          <div className="mb-4 flex items-center gap-2 text-sm">
+            {folderPath.map((crumb, index) => (
+              <div key={index} className="flex items-center gap-2">
+                {index > 0 && (
+                  <svg
+                    className="w-4 h-4 text-gray-500"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                )}
+                <button
+                  onClick={() => handleBreadcrumbClick(index)}
+                  className={`${
+                    index === folderPath.length - 1
+                      ? "text-indigo-400 font-semibold"
+                      : "text-gray-400 hover:text-white"
+                  } transition-colors`}
+                >
+                  {crumb.name}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Action Bar with New Folder Button */}
+          <div className="mb-4 flex items-center gap-3">
+            <button
+              onClick={() => setShowCreateFolderModal(true)}
+              disabled={isLoading}
+              className="px-4 py-2 text-sm font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
+              </svg>
+              New Folder
+            </button>
+          </div>
+
           <FileListHeader
-            filesCount={files.length}
+            filesCount={actualFilesCount}
+            foldersCount={foldersCount}
             filteredCount={filteredFiles.length}
             searchQuery={searchQuery}
             isFetchingFiles={isFetchingFiles}
             onSearchChange={setSearchQuery}
             onRefresh={() => {
               setIsFetchingFiles(true);
-              fetchData();
+              fetchData(currentFolderId);
             }}
           />
 
@@ -519,6 +659,9 @@ export default function DashboardPage() {
                     setFileToDelete(file);
                     setShowDeleteModal(true);
                   }}
+                  onFolderClick={() => handleFolderClick(file)}
+                  loadingFileId={loadingFileId}
+                  loadingMessage={loadingMessage}
                 />
               ))
             )}
@@ -546,6 +689,94 @@ export default function DashboardPage() {
           previewUrl={previewUrl}
           onClose={handleClosePreview}
         />
+      )}
+
+      {/* Create Folder Modal */}
+      {showCreateFolderModal && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setShowCreateFolderModal(false)}
+        >
+          <div
+            className="bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full p-6 animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                <svg
+                  className="w-6 h-6 text-yellow-500"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+                  />
+                </svg>
+                New Folder
+              </h2>
+              <button
+                onClick={() => setShowCreateFolderModal(false)}
+                className="p-2 text-gray-400 hover:text-white hover:bg-gray-700/50 rounded-lg transition-all"
+              >
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Folder Name
+              </label>
+              <input
+                type="text"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleCreateFolder();
+                  if (e.key === "Escape") setShowCreateFolderModal(false);
+                }}
+                placeholder="Enter folder name..."
+                className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleCreateFolder}
+                disabled={isLoading || !newFolderName.trim()}
+                className="flex-1 px-6 py-3 font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                Create Folder
+              </button>
+              <button
+                onClick={() => {
+                  setShowCreateFolderModal(false);
+                  setNewFolderName("");
+                }}
+                disabled={isLoading}
+                className="flex-1 px-6 py-3 font-semibold text-white bg-gray-700 rounded-lg hover:bg-gray-600 transition-all disabled:opacity-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

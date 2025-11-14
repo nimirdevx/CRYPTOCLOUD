@@ -1,5 +1,24 @@
-// Helper function to get file icon based on extension
-const getFileIcon = (filename: string) => {
+// Helper function to get file icon based on extension or folder
+const getFileIcon = (filename: string, isFolder: boolean = false) => {
+  // Folder icon
+  if (isFolder) {
+    return (
+      <svg
+        className="w-8 h-8 text-yellow-500"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+        />
+      </svg>
+    );
+  }
+
   const ext = filename.split(".").pop()?.toLowerCase();
 
   // Image files
@@ -131,6 +150,8 @@ interface FileMetadata {
   owner_id: string;
   upload_time: string;
   file_size: number;
+  isFolder: boolean;
+  parentId: string | null;
 }
 
 interface FileItemProps {
@@ -146,6 +167,9 @@ interface FileItemProps {
   onPreview?: () => void;
   onDownload: () => void;
   onDelete: () => void;
+  onFolderClick?: () => void;
+  loadingFileId?: string | null;
+  loadingMessage?: string | null;
 }
 
 export const FileItem = ({
@@ -161,6 +185,9 @@ export const FileItem = ({
   onPreview,
   onDownload,
   onDelete,
+  onFolderClick,
+  loadingFileId,
+  loadingMessage,
 }: FileItemProps) => {
   // Helper function to check if file can be previewed
   const isPreviewable = (filename: string) => {
@@ -177,6 +204,8 @@ export const FileItem = ({
     ];
     return previewableExtensions.includes(ext);
   };
+
+  const isThisFileLoading = loadingFileId === file.id;
 
   return (
     <div
@@ -229,23 +258,45 @@ export const FileItem = ({
         // Default File View
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4 flex-1 min-w-0">
-            <div className="shrink-0">{getFileIcon(file.filename)}</div>
+            <div className="shrink-0">
+              {getFileIcon(file.filename, file.isFolder)}
+            </div>
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-white truncate group-hover:text-indigo-300 transition-colors">
+              <p
+                className={`font-medium text-white truncate group-hover:text-indigo-300 transition-colors ${
+                  file.isFolder ? "cursor-pointer" : ""
+                }`}
+                onClick={() =>
+                  file.isFolder && onFolderClick && onFolderClick()
+                }
+              >
                 {file.filename}
               </p>
               <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span>
-                  {new Date(file.upload_time).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </span>
-                <span>•</span>
-                <span>{formatBytes(file.file_size)}</span>
+                {isThisFileLoading && loadingMessage ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-indigo-400 font-medium">
+                      {loadingMessage}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span>
+                      {new Date(file.upload_time).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                    <span>•</span>
+                    <span>
+                      {file.isFolder ? "Folder" : formatBytes(file.file_size)}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -253,7 +304,7 @@ export const FileItem = ({
             {/* Rename Button */}
             <button
               onClick={onRenameStart}
-              disabled={isLoading}
+              disabled={isLoading || isThisFileLoading}
               className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 group cursor-pointer"
             >
               <svg
@@ -271,11 +322,11 @@ export const FileItem = ({
               </svg>
               Rename
             </button>
-            {/* Preview Button - Only show for previewable files */}
-            {isPreviewable(file.filename) && onPreview && (
+            {/* Preview Button - Only show for previewable files (not folders) */}
+            {!file.isFolder && isPreviewable(file.filename) && onPreview && (
               <button
                 onClick={onPreview}
-                disabled={isLoading}
+                disabled={isLoading || isThisFileLoading}
                 className="px-4 py-2 text-sm font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 group cursor-pointer"
               >
                 <svg
@@ -300,31 +351,33 @@ export const FileItem = ({
                 Preview
               </button>
             )}
-            {/* Download Button */}
-            <button
-              onClick={onDownload}
-              disabled={isLoading}
-              className="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 group cursor-pointer"
-            >
-              <svg
-                className="w-4 h-4 group-hover:translate-y-0.5 transition-transform"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+            {/* Download Button - Only show for files (not folders) */}
+            {!file.isFolder && (
+              <button
+                onClick={onDownload}
+                disabled={isLoading || isThisFileLoading}
+                className="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 group cursor-pointer"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                />
-              </svg>
-              Download
-            </button>
+                <svg
+                  className="w-4 h-4 group-hover:translate-y-0.5 transition-transform"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                  />
+                </svg>
+                Download
+              </button>
+            )}
             {/* Delete Button */}
             <button
               onClick={onDelete}
-              disabled={isLoading}
+              disabled={isLoading || isThisFileLoading}
               className="px-4 py-2 text-sm font-semibold text-white bg-red-600/80 rounded-lg hover:bg-red-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 group cursor-pointer"
             >
               <svg

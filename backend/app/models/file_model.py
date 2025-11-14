@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from bson import ObjectId
 from datetime import datetime
+from typing import Optional
 
 class PyObjectId(ObjectId):
     @classmethod
@@ -24,6 +25,7 @@ class FileMetadata(BaseModel):
     upload_time: datetime = Field(default_factory=datetime.utcnow)
     file_path: str
     file_size: int
+    parentId: Optional[PyObjectId] = None
 
     class Config:
         from_attributes = True
@@ -36,3 +38,5 @@ class FileMetadataResponse(BaseModel):
     owner_id: str
     upload_time: str
     file_size: int
+    isFolder: bool
+    parentId: Optional[str] = None

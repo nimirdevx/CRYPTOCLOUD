@@ -8,6 +8,7 @@ interface FileUploadSectionProps {
   error: string | null;
   onFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
   onUpload: () => void;
+  currentFolderName?: string;
 }
 
 export const FileUploadSection = ({
@@ -18,6 +19,7 @@ export const FileUploadSection = ({
   error,
   onFileChange,
   onUpload,
+  currentFolderName,
 }: FileUploadSectionProps) => {
   return (
     <div className="glass p-6 rounded-2xl shadow-2xl mb-8 animate-slide-up">
@@ -37,7 +39,17 @@ export const FileUploadSection = ({
             />
           </svg>
         </div>
-        <h2 className="text-2xl font-semibold text-white">Upload New File</h2>
+        <div>
+          <h2 className="text-2xl font-semibold text-white">Upload New File</h2>
+          {currentFolderName && currentFolderName !== "Home" && (
+            <p className="text-sm text-gray-400 mt-0.5">
+              Uploading to:{" "}
+              <span className="text-indigo-400 font-medium">
+                {currentFolderName}
+              </span>
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-col gap-4">
