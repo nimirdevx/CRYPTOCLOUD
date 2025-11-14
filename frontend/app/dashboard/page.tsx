@@ -11,6 +11,7 @@ import { FileUploadSection } from "../components/FileUploadSection";
 import { FileListHeader } from "../components/FileListHeader";
 import { FileItem } from "../components/FileItem";
 import { DeleteConfirmationModal } from "../components/DeleteConfirmationModal";
+import { PreviewModal } from "../components/PreviewModal";
 
 // API URL
 const API_URL = "http://127.0.0.1:8000";
@@ -47,6 +48,9 @@ export default function DashboardPage() {
   const [storageUsage, setStorageUsage] = useState<StorageUsage | null>(null);
   const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
   const [newFilename, setNewFilename] = useState("");
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewFilename, setPreviewFilename] = useState<string>("");
 
   // Filter files based on search query
   const filteredFiles = files.filter((file) =>
@@ -71,7 +75,9 @@ export default function DashboardPage() {
       const filesData: FileMetadata[] = await filesResponse.json();
       setFiles(filesData);
 
-      const storageResponse = await authFetch(`${API_URL}/files/users/me/storage`);
+      const storageResponse = await authFetch(
+        `${API_URL}/files/users/me/storage`
+      );
       if (!storageResponse.ok) throw new Error("Failed to fetch storage.");
       const storageData: StorageUsage = await storageResponse.json();
       setStorageUsage(storageData);
@@ -221,6 +227,70 @@ export default function DashboardPage() {
     }
   };
 
+  // --- Handle Preview ---
+  const handlePreview = async (file: FileMetadata) => {
+    if (!jwt || !encryptionKey) {
+      setError("JWT or Encryption Key is missing.");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setMessage(`Loading preview for ${file.filename}...`);
+
+    try {
+      const response = await authFetch(
+        `${API_URL}/files/download-url/${file.id}`
+      );
+      if (!response.ok) throw new Error("Could not get download URL.");
+
+      const { download_url } = await response.json();
+
+      setMessage("File downloading...");
+      const s3Response = await fetch(download_url);
+      if (!s3Response.ok) throw new Error("File download from S3 failed.");
+
+      const encryptedBuffer = await s3Response.arrayBuffer();
+
+      setMessage("Decrypting file...");
+      const decryptedBuffer = await decryptData(encryptionKey, encryptedBuffer);
+
+      // Determine MIME type based on file extension
+      const ext = file.filename.split(".").pop()?.toLowerCase() || "";
+      let mimeType = "application/octet-stream";
+
+      if (["jpg", "jpeg"].includes(ext)) mimeType = "image/jpeg";
+      else if (ext === "png") mimeType = "image/png";
+      else if (ext === "gif") mimeType = "image/gif";
+      else if (ext === "svg") mimeType = "image/svg+xml";
+      else if (ext === "webp") mimeType = "image/webp";
+      else if (ext === "bmp") mimeType = "image/bmp";
+      else if (ext === "pdf") mimeType = "application/pdf";
+
+      const blob = new Blob([decryptedBuffer], { type: mimeType });
+      const objectUrl = URL.createObjectURL(blob);
+
+      setPreviewUrl(objectUrl);
+      setPreviewFilename(file.filename);
+      setShowPreviewModal(true);
+      setMessage(null);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- Handle Preview Modal Close ---
+  const handleClosePreview = () => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setPreviewUrl(null);
+    setPreviewFilename("");
+    setShowPreviewModal(false);
+  };
+
   // --- Handle Delete ---
   const handleDelete = async (file: FileMetadata) => {
     setIsLoading(true);
@@ -318,7 +388,9 @@ export default function DashboardPage() {
               </svg>
               My Dashboard
             </h1>
-            <p className="text-gray-400">Securely manage your encrypted files</p>
+            <p className="text-gray-400">
+              Securely manage your encrypted files
+            </p>
           </div>
           <div className="flex gap-3">
             <Link
@@ -441,6 +513,7 @@ export default function DashboardPage() {
                   onRenameChange={setNewFilename}
                   onRenameSubmit={() => submitRename(file)}
                   onRenameCancel={cancelRename}
+                  onPreview={() => handlePreview(file)}
                   onDownload={() => handleDownload(file)}
                   onDelete={() => {
                     setFileToDelete(file);
@@ -463,6 +536,15 @@ export default function DashboardPage() {
             setShowDeleteModal(false);
             setFileToDelete(null);
           }}
+        />
+      )}
+
+      {/* Preview Modal */}
+      {showPreviewModal && previewUrl && (
+        <PreviewModal
+          filename={previewFilename}
+          previewUrl={previewUrl}
+          onClose={handleClosePreview}
         />
       )}
     </div>

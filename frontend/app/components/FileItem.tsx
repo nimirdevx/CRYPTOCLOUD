@@ -143,6 +143,7 @@ interface FileItemProps {
   onRenameChange: (filename: string) => void;
   onRenameSubmit: () => void;
   onRenameCancel: () => void;
+  onPreview?: () => void;
   onDownload: () => void;
   onDelete: () => void;
 }
@@ -157,9 +158,26 @@ export const FileItem = ({
   onRenameChange,
   onRenameSubmit,
   onRenameCancel,
+  onPreview,
   onDownload,
   onDelete,
 }: FileItemProps) => {
+  // Helper function to check if file can be previewed
+  const isPreviewable = (filename: string) => {
+    const ext = filename.split(".").pop()?.toLowerCase() || "";
+    const previewableExtensions = [
+      "jpg",
+      "jpeg",
+      "png",
+      "gif",
+      "svg",
+      "webp",
+      "bmp",
+      "pdf",
+    ];
+    return previewableExtensions.includes(ext);
+  };
+
   return (
     <div
       className="p-4 glass-light rounded-xl hover:bg-gray-600/30 transition-all group animate-slide-up"
@@ -253,6 +271,35 @@ export const FileItem = ({
               </svg>
               Rename
             </button>
+            {/* Preview Button - Only show for previewable files */}
+            {isPreviewable(file.filename) && onPreview && (
+              <button
+                onClick={onPreview}
+                disabled={isLoading}
+                className="px-4 py-2 text-sm font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 group cursor-pointer"
+              >
+                <svg
+                  className="w-4 h-4 group-hover:scale-110 transition-transform"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                  />
+                </svg>
+                Preview
+              </button>
+            )}
             {/* Download Button */}
             <button
               onClick={onDownload}
