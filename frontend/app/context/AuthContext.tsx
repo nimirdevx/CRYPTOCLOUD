@@ -17,6 +17,7 @@ interface AuthContextType {
   login: (jwt: string, key: CryptoKey, is2FAEnabled: boolean) => void;
   logout: () => void;
   unlock: (key: CryptoKey) => void;
+  update2FAStatus: (enabled: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -61,6 +62,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setEncryptionKey(key);
   };
 
+  const update2FAStatus = (enabled: boolean) => {
+    setIs2FAEnabled(enabled);
+  };
+
   const value = {
     jwt,
     encryptionKey,
@@ -69,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     unlock,
+    update2FAStatus,
   };
 
   // 3. REMOVE the loading check from here.

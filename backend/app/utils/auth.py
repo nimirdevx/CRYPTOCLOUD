@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
 import jwt
+import hashlib
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -12,11 +13,24 @@ from bson import ObjectId
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
+def _prepare_password(password: str) -> bytes:
+    """
+    Prepare password for bcrypt by hashing it with SHA-256 if it's longer than 72 bytes.
+    This allows us to support very long passwords (like encrypted ones from the frontend).
+    """
+    password_bytes = password.encode('utf-8')
+    if len(password_bytes) > 72:
+        # Hash the password with SHA-256 to ensure it's within bcrypt's limit
+        return hashlib.sha256(password_bytes).hexdigest().encode('utf-8')
+    return password_bytes
+
 def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+    prepared = _prepare_password(plain_password)
+    return pwd_context.verify(prepared, hashed_password)
 
 def get_password_hash(password):
-    return pwd_context.hash(password)
+    prepared = _prepare_password(password)
+    return pwd_context.hash(prepared)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()

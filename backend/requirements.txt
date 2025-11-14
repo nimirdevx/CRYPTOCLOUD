@@ -12,9 +12,11 @@ pymongo>=4.6.0
 
 # Authentication & Security
 passlib[bcrypt]>=1.7.4
+bcrypt==4.0.1
 pyjwt>=2.8.0
 pyotp>=2.9.0
 qrcode>=7.4.2
+pillow>=10.0.0
 
 # Encryption
 pycryptodome>=3.19.0

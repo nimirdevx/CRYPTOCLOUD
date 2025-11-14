@@ -9,7 +9,7 @@ import Image from "next/image";
 const API_URL = "http://127.0.0.1:8000";
 
 export default function SecurityPage() {
-  const { jwt, is2FAEnabled, logout } = useAuth();
+  const { jwt, is2FAEnabled, logout, update2FAStatus } = useAuth();
   const router = useRouter();
 
   const [qrCode, setQrCode] = useState<string | null>(null);
@@ -66,8 +66,8 @@ export default function SecurityPage() {
 
       setMessage("2FA has been enabled successfully!");
       setQrCode(null); // Hide QR code
-      // A simple page reload to update the "2FA is Enabled" status
-      window.location.reload();
+      setTotpCode(""); // Clear the input
+      update2FAStatus(true); // Update the context instead of reloading
     } catch (err: any) {
       setError(err.message);
     }
