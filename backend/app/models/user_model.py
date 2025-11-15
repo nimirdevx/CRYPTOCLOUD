@@ -21,7 +21,9 @@ class PyObjectId(ObjectId):
 class UserCreate(BaseModel):
     username: str
     password: str
-
+    publicKey: str  # The user's public key (base64 string)
+    encryptedPrivateKey: str # The user's private key (encrypted with their password)
+    
 class User(BaseModel):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
     username: str
@@ -29,6 +31,9 @@ class User(BaseModel):
     
     is_2fa_enabled: bool = Field(default=False)
     totp_secret: Optional[str] = None
+    
+    publicKey: Optional[str] = None
+    encryptedPrivateKey: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -3,7 +3,13 @@
 import { useState, useEffect, ChangeEvent } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "next/navigation";
-import { encryptData, decryptData } from "../lib/crypto";
+import {
+  encryptData,
+  decryptData,
+  generateRandomAesKey,
+  encryptFileKey,
+  decryptFileKey,
+} from "../lib/crypto";
 import Link from "next/link";
 import { FileItemSkeleton } from "../components/SkeletonLoader";
 import { StorageQuotaBar } from "../components/StorageQuotaBar";
@@ -12,6 +18,7 @@ import { FileListHeader } from "../components/FileListHeader";
 import { FileItem } from "../components/FileItem";
 import { DeleteConfirmationModal } from "../components/DeleteConfirmationModal";
 import { PreviewModal } from "../components/PreviewModal";
+import { ShareModal } from "../components/ShareModal"; // 1. Import ShareModal
 
 // API URL
 const API_URL = "http://127.0.0.1:8000";
@@ -25,6 +32,7 @@ interface FileMetadata {
   file_size: number;
   isFolder: boolean;
   parentId: string | null;
+  encryptedFileKey: string | null;
 }
 
 // Breadcrumb interface
@@ -68,6 +76,9 @@ export default function DashboardPage() {
   ]);
   const [loadingFileId, setLoadingFileId] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
+
+  // --- 2. ADD NEW STATE FOR THE SHARE MODAL ---
+  const [fileToShare, setFileToShare] = useState<FileMetadata | null>(null);
 
   // Filter files based on search query
   const filteredFiles = files
@@ -136,7 +147,7 @@ export default function DashboardPage() {
   // --- Handle Upload ---
   const handleUpload = async () => {
     if (!selectedFile || !jwt || !encryptionKey) {
-      setError("File, JWT, or Encryption Key is missing.");
+      setError("File, JWT, or Master Key is missing.");
       return;
     }
 
@@ -146,12 +157,26 @@ export default function DashboardPage() {
     setMessage("Starting upload...");
 
     try {
+      // --- Step 0a: Generate a NEW, unique key for this file ---
+      setMessage("Generating file key...");
+      const fileKey = await generateRandomAesKey();
+
+      // --- Step 0b: Read and Encrypt the file using the NEW fileKey ---
       setMessage("Encrypting file...");
-      setUploadProgress(25);
+      setUploadProgress(10);
       const fileBuffer = await selectedFile.arrayBuffer();
-      const encryptedBuffer = await encryptData(encryptionKey, fileBuffer);
+      const encryptedBuffer = await encryptData(fileKey, fileBuffer); // Encrypt with fileKey
       const encryptedBlob = new Blob([encryptedBuffer]);
 
+      // --- Step 0c: Encrypt the fileKey with the MASTER key ---
+      setMessage("Securing file key...");
+      setUploadProgress(20);
+      const encryptedFileKeyString = await encryptFileKey(
+        encryptionKey,
+        fileKey
+      ); // Encrypt fileKey with masterKey
+
+      // --- Step 1: Request Upload URL ---
       setMessage("Requesting upload location...");
       setUploadProgress(40);
       const requestUploadResponse = await authFetch(
@@ -170,6 +195,7 @@ export default function DashboardPage() {
 
       const { upload_url, s3_key } = await requestUploadResponse.json();
 
+      // --- Step 2: Upload encrypted file to S3 ---
       setMessage("Uploading file...");
       setUploadProgress(60);
       const uploadToS3Response = await fetch(upload_url, {
@@ -179,6 +205,7 @@ export default function DashboardPage() {
       });
       if (!uploadToS3Response.ok) throw new Error("File upload to S3 failed.");
 
+      // --- Step 3: Finalize Upload (UPDATED) ---
       setMessage("Finalizing upload...");
       setUploadProgress(80);
       const finalizeResponse = await authFetch(
@@ -191,6 +218,7 @@ export default function DashboardPage() {
             s3_key: s3_key,
             file_size: selectedFile.size,
             parentId: currentFolderId,
+            encryptedFileKey: encryptedFileKeyString, // <-- SEND THE KEY
           }),
         }
       );
@@ -221,7 +249,12 @@ export default function DashboardPage() {
   // --- Handle Download ---
   const handleDownload = async (file: FileMetadata) => {
     if (!jwt || !encryptionKey) {
-      setError("JWT or Encryption Key is missing.");
+      setError("JWT or Master Key is missing.");
+      return;
+    }
+    if (!file.encryptedFileKey) {
+      // Sanity check
+      setError("File key is missing. Cannot decrypt.");
       return;
     }
 
@@ -230,6 +263,7 @@ export default function DashboardPage() {
     setError(null);
 
     try {
+      // --- Step 1: Request Download URL ---
       const response = await authFetch(
         `${API_URL}/files/download-url/${file.id}`
       );
@@ -237,14 +271,25 @@ export default function DashboardPage() {
 
       const { download_url } = await response.json();
 
-      setLoadingMessage("Decrypting...");
+      // --- Step 2: Download the ENCRYPTED file from S3 ---
+      setLoadingMessage("File downloading...");
       const s3Response = await fetch(download_url);
       if (!s3Response.ok) throw new Error("File download from S3 failed.");
 
       const encryptedBuffer = await s3Response.arrayBuffer();
 
-      const decryptedBuffer = await decryptData(encryptionKey, encryptedBuffer);
+      // --- Step 3a: Decrypt the FILE KEY ---
+      setLoadingMessage("Unlocking file key...");
+      const fileKey = await decryptFileKey(
+        encryptionKey,
+        file.encryptedFileKey
+      );
 
+      // --- Step 3b: Decrypt the FILE DATA ---
+      setLoadingMessage("Decrypting file...");
+      const decryptedBuffer = await decryptData(fileKey, encryptedBuffer);
+
+      // --- Success! Offer file to user ---
       const blob = new Blob([decryptedBuffer]);
       const link = document.createElement("a");
       link.href = window.URL.createObjectURL(blob);
@@ -263,7 +308,12 @@ export default function DashboardPage() {
   // --- Handle Preview ---
   const handlePreview = async (file: FileMetadata) => {
     if (!jwt || !encryptionKey) {
-      setError("JWT or Encryption Key is missing.");
+      setError("JWT or Master Key is missing.");
+      return;
+    }
+    if (!file.encryptedFileKey) {
+      // Sanity check
+      setError("File key is missing. Cannot decrypt.");
       return;
     }
 
@@ -272,6 +322,7 @@ export default function DashboardPage() {
     setError(null);
 
     try {
+      // --- Step 1: Request Download URL ---
       const response = await authFetch(
         `${API_URL}/files/download-url/${file.id}`
       );
@@ -279,15 +330,25 @@ export default function DashboardPage() {
 
       const { download_url } = await response.json();
 
-      setMessage("File downloading...");
+      // --- Step 2: Download the ENCRYPTED file from S3 ---
+      setLoadingMessage("File downloading...");
       const s3Response = await fetch(download_url);
       if (!s3Response.ok) throw new Error("File download from S3 failed.");
 
       const encryptedBuffer = await s3Response.arrayBuffer();
 
-      setMessage("Decrypting file...");
-      const decryptedBuffer = await decryptData(encryptionKey, encryptedBuffer);
+      // --- Step 3a: Decrypt the FILE KEY ---
+      setLoadingMessage("Unlocking file key...");
+      const fileKey = await decryptFileKey(
+        encryptionKey,
+        file.encryptedFileKey
+      );
 
+      // --- Step 3b: Decrypt the FILE DATA ---
+      setLoadingMessage("Decrypting file...");
+      const decryptedBuffer = await decryptData(fileKey, encryptedBuffer);
+
+      // --- Success! Show preview ---
       // Determine MIME type based on file extension
       const ext = file.filename.split(".").pop()?.toLowerCase() || "";
       let mimeType = "application/octet-stream";
@@ -530,6 +591,103 @@ export default function DashboardPage() {
           currentFolderName={folderPath[folderPath.length - 1].name}
         />
 
+        {/* Sharing Quick Access Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          {/* Shared With Me Card */}
+          <Link
+            href="/dashboard/shared"
+            className="group glass p-6 rounded-xl hover:bg-white/10 transition-all cursor-pointer border border-white/5 hover:border-indigo-500/50"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-indigo-600/20 rounded-lg group-hover:bg-indigo-600/30 transition-colors">
+                  <svg
+                    className="w-6 h-6 text-indigo-400 group-hover:scale-110 transition-transform"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">
+                    Shared With Me
+                  </h3>
+                  <p className="text-sm text-gray-400">
+                    Files others have shared
+                  </p>
+                </div>
+              </div>
+              <svg
+                className="w-5 h-5 text-gray-400 group-hover:text-white group-hover:translate-x-1 transition-all"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </div>
+          </Link>
+
+          {/* Shared By Me Card */}
+          <Link
+            href="/dashboard/myshares"
+            className="group glass p-6 rounded-xl hover:bg-white/10 transition-all cursor-pointer border border-white/5 hover:border-purple-500/50"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-purple-600/20 rounded-lg group-hover:bg-purple-600/30 transition-colors">
+                  <svg
+                    className="w-6 h-6 text-purple-400 group-hover:scale-110 transition-transform"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">
+                    Shared By Me
+                  </h3>
+                  <p className="text-sm text-gray-400">
+                    Files you&apos;ve shared
+                  </p>
+                </div>
+              </div>
+              <svg
+                className="w-5 h-5 text-gray-400 group-hover:text-white group-hover:translate-x-1 transition-all"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </div>
+          </Link>
+        </div>
+
         {/* File List Section */}
         <div
           className="glass p-6 rounded-2xl shadow-2xl animate-slide-up"
@@ -662,6 +820,7 @@ export default function DashboardPage() {
                   onFolderClick={() => handleFolderClick(file)}
                   loadingFileId={loadingFileId}
                   loadingMessage={loadingMessage}
+                  onShare={() => setFileToShare(file)} // --- 4. ADD onShare PROP ---
                 />
               ))
             )}
@@ -777,6 +936,15 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* --- 5. ADD THE SHARE MODAL RENDER --- */}
+      {fileToShare && (
+        <ShareModal
+          file={fileToShare}
+          authFetch={authFetch}
+          onClose={() => setFileToShare(null)}
+        />
       )}
     </div>
   );

@@ -5,6 +5,15 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/app/context/AuthContext"; // 2. Import useAuth
 
+// --- 1. IMPORT THE NEW CRYPTO FUNCTIONS ---
+import {
+  deriveKey,
+  generateRsaKeyPair,
+  exportPublicKey,
+  encryptPrivateKey,
+} from "@/app/lib/crypto";
+// ------------------------------------------
+
 // Set your FastAPI server's URL
 const API_URL = "http://127.0.0.1:8000";
 
@@ -30,12 +39,35 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
+      // --- 2. GENERATE ALL KEYS CLIENT-SIDE ---
+      // A) Derive the master key from the password
+      const masterKey = await deriveKey(password);
+
+      // B) Generate the new RSA key pair
+      const { publicKey, privateKey } = await generateRsaKeyPair();
+
+      // C) Export the Public Key to a string
+      const publicKeyString = await exportPublicKey(publicKey);
+
+      // D) Encrypt and export the Private Key
+      const encryptedPrivateKeyString = await encryptPrivateKey(
+        masterKey,
+        privateKey
+      );
+      // ----------------------------------------
+
+      // 3. SEND ALL DATA TO THE BACKEND
       const response = await fetch(`${API_URL}/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({
+          username,
+          password,
+          publicKey: publicKeyString, // Send the new public key
+          encryptedPrivateKey: encryptedPrivateKeyString, // Send the new encrypted private key
+        }),
       });
 
       if (!response.ok) {
@@ -46,6 +78,7 @@ export default function RegisterPage() {
       // Success! Redirect to login page
       router.push("/auth/login");
     } catch (err: any) {
+      console.error("Registration error:", err); // Log the full error
       setError(err.message);
     } finally {
       setIsLoading(false);

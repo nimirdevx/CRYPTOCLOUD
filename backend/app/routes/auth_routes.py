@@ -10,7 +10,7 @@ from ..models.user_model import UserCreate, User, UserResponse
 from ..utils.auth import get_password_hash, verify_password, create_access_token, get_current_user
 from ..db import get_user_collection
 from ..db import get_file_collection
-
+from typing import Optional
 from motor.motor_asyncio import AsyncIOMotorCollection
 from ..config import settings
 
@@ -25,6 +25,9 @@ class TwoFaLoginRequest(BaseModel):
     password: str
     totp_code: str
 
+class UserKeysResponse(BaseModel):
+    publicKey: Optional[str] = None
+    encryptedPrivateKey: Optional[str] = None
 
 # -------------------------------------
 class DeleteAccountRequest(BaseModel):
@@ -52,7 +55,12 @@ async def register(user: UserCreate, users: AsyncIOMotorCollection = Depends(get
         )
     hashed_password = get_password_hash(user.password)
     # Create the full user document with 2FA fields disabled
-    new_user_data = {"username": user.username, "hashed_password": hashed_password, "is_2fa_enabled": False, "totp_secret": None}
+    new_user_data = {"username": user.username, 
+                     "hashed_password": hashed_password,
+                     "is_2fa_enabled": False, "totp_secret": None,
+                     "publicKey": user.publicKey,
+                     "encryptedPrivateKey": user.encryptedPrivateKey}
+    
     new_user = await users.insert_one(new_user_data)
     created_user = await users.find_one({"_id": new_user.inserted_id})
     
@@ -323,3 +331,22 @@ async def verify_password_for_session(
     # 3. If it's correct, return 204 No Content (success)
     print(f"[DEBUG] Password verification successful for user: {current_user.username}")
     return
+
+# --- NEW: Get User's Keys ---
+@router.get("/me/keys", response_model=UserKeysResponse)
+async def get_user_keys(
+    current_user: User = Depends(get_current_user),
+    users: AsyncIOMotorCollection = Depends(get_user_collection)
+):
+    """
+    Fetches the user's public and encrypted private keys
+    after they have logged in.
+    """
+    user_doc = await users.find_one({"_id": current_user.id})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return UserKeysResponse(
+        publicKey=user_doc.get("publicKey"),
+        encryptedPrivateKey=user_doc.get("encryptedPrivateKey")
+    )

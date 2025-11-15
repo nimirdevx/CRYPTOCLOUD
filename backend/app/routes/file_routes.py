@@ -8,7 +8,7 @@ from datetime import datetime
 from ..models.user_model import User
 from ..models.file_model import FileMetadata, FileMetadataResponse
 from ..utils.auth import get_current_user
-from ..db import get_file_collection
+from ..db import get_file_collection,get_shared_files_collection
 from ..config import settings
 from motor.motor_asyncio import AsyncIOMotorCollection
 from bson import ObjectId
@@ -36,6 +36,7 @@ class FinalizeRequest(BaseModel):
     s3_key: str
     file_size: int
     parentId: Optional[str] = None
+    encryptedFileKey: str  # The file's encryption key, encrypted with the user's master key
 
 class DownloadResponse(BaseModel):
     download_url: str
@@ -134,7 +135,8 @@ async def create_folder(
         "file_path": "",  # Folders don't have an S3 path
         "file_size": 0,     # Folders have 0 size
         "isFolder": True,
-        "parentId": parent_obj_id
+        "parentId": parent_obj_id,
+        "encryptedFileKey": None # Folders don't have a file key
     }
     
     new_folder = await files.insert_one(folder_metadata)
@@ -171,7 +173,8 @@ async def finalize_upload(
         "upload_time": datetime.utcnow(),
         "file_size": request.file_size,
         "isFolder": False, # Files are not folders
-        "parentId": parent_obj_id # Set the parent folder
+        "parentId": parent_obj_id , # Set the parent folder 
+        "encryptedFileKey": request.encryptedFileKey
     }
     
     new_file = await files.insert_one(file_metadata)
@@ -185,7 +188,8 @@ async def finalize_upload(
         upload_time=created_file["upload_time"].isoformat(),
         file_size=created_file["file_size"],
         isFolder=created_file["isFolder"],
-        parentId=str(created_file["parentId"]) if created_file["parentId"] else None
+        parentId=str(created_file["parentId"]) if created_file["parentId"] else None,
+        encryptedFileKey=created_file.get("encryptedFileKey")
     )
 
 # --- UNCHANGED: LIST FILES ---
@@ -218,7 +222,8 @@ async def list_items(
                 upload_time=f["upload_time"].isoformat(),
                 file_size=f.get("file_size", 0),
                 isFolder=f.get("isFolder", False),
-                parentId=str(f["parentId"]) if f.get("parentId") else None
+                parentId=str(f["parentId"]) if f.get("parentId") else None,
+                encryptedFileKey=f.get("encryptedFileKey")
             )
         )
     return response_list
@@ -227,10 +232,14 @@ async def list_items(
 async def get_download_url(
     file_id: str,
     current_user: User = Depends(get_current_user),
-    files: AsyncIOMotorCollection = Depends(get_file_collection)
+    files: AsyncIOMotorCollection = Depends(get_file_collection),
+    # 2. ADD THE SHARED_FILES COLLECTION
+    shared_files: AsyncIOMotorCollection = Depends(get_shared_files_collection) 
 ):
     """
     Client asks for a URL to download a file from.
+    This now checks if the user is the owner OR if the file
+    has been shared with them.
     """
     try:
         obj_id = ObjectId(file_id)
@@ -239,9 +248,28 @@ async def get_download_url(
 
     file_metadata = await files.find_one({"_id": obj_id})
 
-    if not file_metadata or file_metadata["owner_id"] != current_user.id:
-        raise HTTPException(status_code=404, detail="File not found or access denied")
-        
+    if not file_metadata:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # --- 3. THE NEW PERMISSION LOGIC ---
+    is_owner = file_metadata["owner_id"] == current_user.id
+    is_recipient = False
+    
+    if not is_owner:
+        # If not the owner, check if a share record exists
+        share_record = await shared_files.find_one({
+            "file_id": obj_id,
+            "recipient_id": current_user.id
+        })
+        if share_record:
+            is_recipient = True
+
+    # If the user is NOT the owner AND NOT a recipient, deny access
+    if not is_owner and not is_recipient:
+        raise HTTPException(status_code=403, detail="Access denied")
+    # ------------------------------------
+
+    # If we get here, the user has permission.
     if file_metadata.get("isFolder", False):
         raise HTTPException(status_code=400, detail="Cannot download a folder")
 
@@ -345,5 +373,6 @@ async def rename_item(
         upload_time=updated_file["upload_time"].isoformat(),
         file_size=updated_file.get("file_size", 0),
         isFolder=updated_file.get("isFolder", False),
-        parentId=str(updated_file["parentId"]) if updated_file.get("parentId") else None
+        parentId=str(updated_file["parentId"]) if updated_file.get("parentId") else None,
+        encryptedFileKey=updated_file.get("encryptedFileKey")
     )

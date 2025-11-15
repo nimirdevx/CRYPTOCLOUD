@@ -11,12 +11,18 @@ import React, {
 // 1. Add 'isInitialized' to the context type
 interface AuthContextType {
   jwt: string | null;
-  encryptionKey: CryptoKey | null;
+  encryptionKey: CryptoKey | null; // This is the "Master Key" (AES)
+  privateKey: CryptoKey | null; // <-- RSA Private Key
   is2FAEnabled: boolean | null;
-  isInitialized: boolean; // <-- ADD THIS
-  login: (jwt: string, key: CryptoKey, is2FAEnabled: boolean) => void;
+  isInitialized: boolean;
+  login: (
+    jwt: string,
+    masterKey: CryptoKey,
+    privateKey: CryptoKey, // <-- ADD THIS
+    is2FAEnabled: boolean
+  ) => void;
   logout: () => void;
-  unlock: (key: CryptoKey) => void;
+  unlock: (masterKey: CryptoKey, privateKey: CryptoKey) => void; // <-- UPDATE THIS
   update2FAStatus: (enabled: boolean) => void;
 }
 
@@ -25,8 +31,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [jwt, setJwt] = useState<string | null>(null);
   const [encryptionKey, setEncryptionKey] = useState<CryptoKey | null>(null);
+  const [privateKey, setPrivateKey] = useState<CryptoKey | null>(null); // <-- ADD THIS
   const [is2FAEnabled, setIs2FAEnabled] = useState<boolean | null>(null);
-  const [isInitialized, setIsInitialized] = useState(false); // <-- Already here
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     try {
@@ -42,11 +49,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = (
     newJwt: string,
-    newKey: CryptoKey,
+    newMasterKey: CryptoKey,
+    newPrivateKey: CryptoKey, // <-- ADD THIS
     newIs2FAEnabled: boolean
   ) => {
     setJwt(newJwt);
-    setEncryptionKey(newKey);
+    setEncryptionKey(newMasterKey);
+    setPrivateKey(newPrivateKey); // <-- ADD THIS
     setIs2FAEnabled(newIs2FAEnabled);
     localStorage.setItem("access_token", newJwt);
   };
@@ -54,12 +63,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     setJwt(null);
     setEncryptionKey(null);
+    setPrivateKey(null); // <-- ADD THIS
     setIs2FAEnabled(null);
     localStorage.removeItem("access_token");
   };
 
-  const unlock = (key: CryptoKey) => {
-    setEncryptionKey(key);
+  const unlock = (newMasterKey: CryptoKey, newPrivateKey: CryptoKey) => {
+    setEncryptionKey(newMasterKey);
+    setPrivateKey(newPrivateKey); // <-- ADD THIS
   };
 
   const update2FAStatus = (enabled: boolean) => {
@@ -69,8 +80,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = {
     jwt,
     encryptionKey,
+    privateKey, // <-- ADD THIS
     is2FAEnabled,
-    isInitialized, // <-- 2. Pass 'isInitialized' in the value
+    isInitialized,
     login,
     logout,
     unlock,

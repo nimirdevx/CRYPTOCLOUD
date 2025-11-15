@@ -1,11 +1,12 @@
 from fastapi import FastAPI
-from .routes import auth_routes, file_routes
+from .routes import auth_routes, file_routes, share_routes
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="CryptoCloud API")
 
 app.include_router(auth_routes.router, prefix="/auth", tags=["Authentication"])
 app.include_router(file_routes.router, prefix="/files", tags=["Files"])
+app.include_router(share_routes.router, prefix="/share", tags=["Sharing"])
 
 app.add_middleware(
     CORSMiddleware,

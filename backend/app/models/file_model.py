@@ -25,7 +25,11 @@ class FileMetadata(BaseModel):
     upload_time: datetime = Field(default_factory=datetime.utcnow)
     file_path: str
     file_size: int
+    
+    # --- ADD/UPDATE THESE FIELDS ---
+    isFolder: bool = Field(default=False)
     parentId: Optional[PyObjectId] = None
+    encryptedFileKey: Optional[str] = None # Key to decrypt this specific file
 
     class Config:
         from_attributes = True
@@ -38,5 +42,8 @@ class FileMetadataResponse(BaseModel):
     owner_id: str
     upload_time: str
     file_size: int
+    
+    # --- ADD/UPDATE THESE FIELDS ---
     isFolder: bool
     parentId: Optional[str] = None
+    encryptedFileKey: Optional[str] = None

@@ -2,14 +2,16 @@
 
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { deriveKey } from "../lib/crypto";
+// 1. IMPORT new crypto function
+import { deriveKey, decryptPrivateKey } from "../lib/crypto";
 
 export default function PasswordPrompt() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const { unlock, logout, jwt } = useAuth();     
+  // 2. Get 'jwt' and update 'unlock'
+  const { unlock, logout, jwt } = useAuth();
 
   const API_URL = "http://127.0.0.1:8000";
 
@@ -19,29 +21,44 @@ export default function PasswordPrompt() {
     setError(null);
 
     try {
-      // --- 3. This is the new verification step ---
+      // --- 3. Verify Password ---
       const response = await fetch(`${API_URL}/auth/verify-password`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${jwt}` // We are already authenticated
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${jwt}`, // We are already authenticated
         },
-        body: JSON.stringify({ password: password })
+        body: JSON.stringify({ password: password }),
       });
 
       if (!response.ok) {
         // The server (401) will tell us the password was wrong
-        throw new Error('Incorrect password. Please try again.');
+        throw new Error("Incorrect password. Please try again.");
       }
       // --- End of verification step ---
 
-      // 4. If we reach here, the password was correct!
-      // Now we derive the key, 100% sure it's the right one.
-      const encryptionKey = await deriveKey(password);
-      
-      // 5. Save it to the context. We're "unlocked"!
-      unlock(encryptionKey);
+      // --- 4. Password is correct. Derive/Fetch/Decrypt ALL keys ---
 
+      // A) Derive the master key
+      const masterKey = await deriveKey(password);
+
+      // B) Fetch the encrypted private key
+      const keysResponse = await fetch(`${API_URL}/auth/me/keys`, {
+        headers: { Authorization: `Bearer ${jwt}` },
+      });
+      if (!keysResponse.ok) throw new Error("Failed to fetch user keys.");
+
+      const { encryptedPrivateKey } = await keysResponse.json();
+      if (!encryptedPrivateKey) throw new Error("User keys are not set up.");
+
+      // C) Decrypt the private key
+      const privateKey = await decryptPrivateKey(
+        masterKey,
+        encryptedPrivateKey
+      );
+
+      // 5. Save BOTH keys to the context. We're "unlocked"!
+      unlock(masterKey, privateKey); // <-- Pass both keys
     } catch (err: any) {
       setError(err.message || "An error occurred.");
     }

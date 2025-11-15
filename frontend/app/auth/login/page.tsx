@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/app/context/AuthContext";
-import { deriveKey } from "@/app/lib/crypto";
+// 1. IMPORT new crypto function
+import { deriveKey, decryptPrivateKey } from "@/app/lib/crypto";
 
 const API_URL = "http://127.0.0.1:8000";
 
@@ -43,8 +44,21 @@ export default function LoginPage() {
     setError(null);
     setIsLoading(true);
 
+    // --- Helper function to fetch keys ---
+    const fetchAndDecryptKeys = async (token: string, masterKey: CryptoKey) => {
+      const keysResponse = await fetch(`${API_URL}/auth/me/keys`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!keysResponse.ok) throw new Error("Failed to fetch user keys.");
+
+      const { encryptedPrivateKey } = await keysResponse.json();
+      if (!encryptedPrivateKey) throw new Error("User keys are not set up.");
+
+      return await decryptPrivateKey(masterKey, encryptedPrivateKey);
+    };
+
+    // --- 2FA LOGIN FLOW ---
     if (needs2FA) {
-      // --- This is the 2FA LOGIN flow ---
       try {
         const response = await fetch(`${API_URL}/auth/2fa/login`, {
           method: "POST",
@@ -64,11 +78,11 @@ export default function LoginPage() {
         const jwtToken = data.access_token;
         const is2FAEnabled = data.is_2fa_enabled;
 
-        // Derive the key
-        const encryptionKey = await deriveKey(password);
-
-        // Save to context
-        login(jwtToken, encryptionKey, is2FAEnabled);
+        // --- ADD KEY DECRYPTION ---
+        const masterKey = await deriveKey(password);
+        const privateKey = await fetchAndDecryptKeys(jwtToken, masterKey);
+        login(jwtToken, masterKey, privateKey, is2FAEnabled); // <-- Pass new key
+        // -------------------------
 
         router.push("/dashboard");
       } catch (err: any) {
@@ -101,8 +115,13 @@ export default function LoginPage() {
           // --- Standard Login Success ---
           const jwtToken = data.access_token;
           const is2FAEnabled = data.is_2fa_enabled;
-          const encryptionKey = await deriveKey(password);
-          login(jwtToken, encryptionKey, is2FAEnabled);
+
+          // --- ADD KEY DECRYPTION ---
+          const masterKey = await deriveKey(password);
+          const privateKey = await fetchAndDecryptKeys(jwtToken, masterKey);
+          login(jwtToken, masterKey, privateKey, is2FAEnabled); // <-- Pass new key
+          // -------------------------
+
           router.push("/dashboard");
         }
       } catch (err: any) {
