@@ -17,6 +17,7 @@ export default function LoginPage() {
   const [needs2FA, setNeeds2FA] = useState(false); // <-- ADD 2FA STEP STATE
   const [isLoading, setIsLoading] = useState(false); // <-- ADD LOADING STATE
   const [showPassword, setShowPassword] = useState(false); // Password visibility toggle
+  const [useBackupCode, setUseBackupCode] = useState(false); // Toggle between TOTP and backup code
 
   const router = useRouter();
   const { login, jwt, isInitialized } = useAuth();
@@ -310,6 +311,16 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+
+            {/* Forgot Password Link */}
+            <div className="mb-6 text-right">
+              <Link
+                href="/auth/forgot-password"
+                className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+              >
+                Forgot password?
+              </Link>
+            </div>
           </>
         )}
 
@@ -317,7 +328,7 @@ export default function LoginPage() {
         {needs2FA && (
           <div className="mb-6">
             <label className="block mb-2 text-sm font-medium text-gray-300">
-              6-Digit Code
+              {useBackupCode ? "Backup Code" : "6-Digit Code"}
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
@@ -340,10 +351,24 @@ export default function LoginPage() {
                 value={totpCode}
                 onChange={(e) => setTotpCode(e.target.value)}
                 className="w-full pl-10 p-3 bg-gray-700/50 backdrop-blur-sm rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-gray-400 text-center text-2xl tracking-widest transition-all"
-                placeholder="000000"
+                placeholder={useBackupCode ? "1234-5678" : "000000"}
                 required
-                maxLength={6}
+                maxLength={useBackupCode ? 9 : 6}
               />
+            </div>
+            <div className="mt-3 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setUseBackupCode(!useBackupCode);
+                  setTotpCode("");
+                }}
+                className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors underline"
+              >
+                {useBackupCode
+                  ? "Use authenticator code instead?"
+                  : "Use a backup code instead?"}
+              </button>
             </div>
           </div>
         )}
@@ -433,6 +458,7 @@ export default function LoginPage() {
               setNeeds2FA(false);
               setTotpCode("");
               setError(null);
+              setUseBackupCode(false);
             }}
             className="w-full mt-4 p-2 text-sm text-gray-400 hover:text-white transition-colors flex items-center justify-center gap-2"
           >

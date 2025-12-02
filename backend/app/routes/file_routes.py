@@ -1,5 +1,4 @@
 import uuid
-import boto3
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from typing import List, Optional
@@ -12,15 +11,7 @@ from ..db import get_file_collection,get_shared_files_collection
 from ..config import settings
 from motor.motor_asyncio import AsyncIOMotorCollection
 from bson import ObjectId
-
-# --- NEW S3 SETUP ---
-router = APIRouter()
-s3_client = boto3.client(
-    "s3",
-    aws_access_key_id=settings.aws_access_key_id,
-    aws_secret_access_key=settings.aws_secret_access_key,
-    region_name=settings.s3_region
-)
+from ..utils.file_utils import s3_client, recursive_delete
 
 # --- NEW Pydantic Models for our new routes ---
 class UploadRequest(BaseModel):
@@ -53,34 +44,7 @@ class StorageUsageResponse(BaseModel):
     quota: int
 
 
-async def recursive_delete(file_id: ObjectId, user_id: ObjectId, files: AsyncIOMotorCollection):
-    """
-    Helper function to recursively delete folders and files.
-    """
-    file_doc = await files.find_one({"_id": file_id, "owner_id": user_id})
-    if not file_doc:
-        return # File already gone or doesn't belong to user
-
-    if file_doc.get("isFolder", False):
-        # It's a folder, delete all its children first
-        children = await files.find({"parentId": file_id, "owner_id": user_id}).to_list(length=None)
-        for child in children:
-            await recursive_delete(child["_id"], user_id, files)
-    else:
-        # It's a file, delete it from S3
-        s3_key = file_doc["file_path"]
-        if s3_key: # Only try to delete if there's an S3 key
-            try:
-                s3_client.delete_object(
-                    Bucket=settings.s3_bucket_name,
-                    Key=s3_key
-                )
-            except Exception as e:
-                # Log the error but don't stop the database cleanup
-                print(f"Error deleting S3 object {s3_key}: {e}")
-
-    # Finally, delete the item itself from MongoDB
-    await files.delete_one({"_id": file_id, "owner_id": user_id})
+router = APIRouter()
 
 # --- NEW: REQUEST UPLOAD URL ---
 @router.post("/request-upload-url", response_model=UploadResponse)

@@ -5,6 +5,7 @@ import { useAuth } from "@/app/context/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import BackupCodesModal from "@/app/components/BackupCodesModal";
 
 const API_URL = "http://127.0.0.1:8000";
 
@@ -21,6 +22,24 @@ export default function SecurityPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // ------------------------------------
+
+  // --- NEW STATES FOR DISABLE 2FA MODAL ---
+  const [showDisable2FAModal, setShowDisable2FAModal] = useState(false);
+  const [disable2FAPassword, setDisable2FAPassword] = useState("");
+  const [disable2FAError, setDisable2FAError] = useState<string | null>(null);
+  // ------------------------------------
+
+  // --- NEW STATES FOR BACKUP CODES ---
+  const [showBackupCodesPasswordModal, setShowBackupCodesPasswordModal] =
+    useState(false);
+  const [backupCodesPassword, setBackupCodesPassword] = useState("");
+  const [backupCodesPasswordError, setBackupCodesPasswordError] = useState<
+    string | null
+  >(null);
+  const [generatedBackupCodes, setGeneratedBackupCodes] = useState<
+    string[] | null
+  >(null);
   // ------------------------------------
 
   // Helper for authenticated fetch
@@ -98,6 +117,71 @@ export default function SecurityPage() {
       }
     } catch (err: any) {
       setDeleteError(err.message);
+    }
+  };
+  // ------------------------------------
+
+  // --- 4. Handle Disable 2FA ---
+  const handleDisable2FA = async () => {
+    if (!disable2FAPassword) {
+      setDisable2FAError("You must enter your password.");
+      return;
+    }
+    setDisable2FAError(null);
+
+    try {
+      const response = await authFetch(`${API_URL}/auth/2fa/disable`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: disable2FAPassword }),
+      });
+
+      if (response.status === 204) {
+        // Success!
+        setMessage("2FA has been disabled successfully!");
+        setShowDisable2FAModal(false);
+        setDisable2FAPassword("");
+        update2FAStatus(false); // Update the context
+      } else {
+        const data = await response.json();
+        throw new Error(data.detail || "Failed to disable 2FA.");
+      }
+    } catch (err: any) {
+      setDisable2FAError(err.message);
+    }
+  };
+  // ------------------------------------
+
+  // --- 5. Handle Generate Backup Codes ---
+  const handleGenerateBackupCodes = async () => {
+    if (!backupCodesPassword) {
+      setBackupCodesPasswordError("You must enter your password.");
+      return;
+    }
+    setBackupCodesPasswordError(null);
+
+    try {
+      const response = await authFetch(
+        `${API_URL}/auth/2fa/generate-backup-codes`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: backupCodesPassword }),
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        // Close password modal and show codes modal
+        setShowBackupCodesPasswordModal(false);
+        setBackupCodesPassword("");
+        setGeneratedBackupCodes(data); // data is already an array of backup codes
+      } else {
+        const data = await response.json();
+        throw new Error(data.detail || "Failed to generate backup codes.");
+      }
+    } catch (err: any) {
+      setBackupCodesPasswordError(err.message);
     }
   };
   // ------------------------------------
@@ -229,7 +313,7 @@ export default function SecurityPage() {
                     <h3 className="text-lg font-semibold text-white mb-2">
                       Your account is protected
                     </h3>
-                    <p className="text-gray-300">
+                    <p className="text-gray-300 mb-4">
                       Two-factor authentication is currently{" "}
                       <span className="text-green-400 font-semibold">
                         enabled
@@ -237,6 +321,25 @@ export default function SecurityPage() {
                       on your account. You'll need to enter a code from your
                       authenticator app when signing in.
                     </p>
+                    <button
+                      onClick={() => setShowDisable2FAModal(true)}
+                      className="px-5 py-2.5 font-semibold text-white bg-red-600/80 rounded-lg hover:bg-red-600 transition-all flex items-center gap-2 group"
+                    >
+                      <svg
+                        className="w-5 h-5 group-hover:scale-110 transition-transform"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                      Disable 2FA
+                    </button>
                   </div>
                 </div>
               </div>
@@ -422,6 +525,92 @@ export default function SecurityPage() {
             )}
           </div>
 
+          {/* Backup Codes Section - Only show if 2FA is enabled */}
+          {is2FAEnabled && (
+            <div
+              className="glass p-8 rounded-2xl shadow-2xl mb-8 animate-slide-up"
+              style={{ animationDelay: "0.15s" }}
+            >
+              <div className="flex items-start justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center shrink-0">
+                    <svg
+                      className="w-6 h-6 text-purple-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-semibold text-white mb-1">
+                      Backup Codes
+                    </h2>
+                    <p className="text-sm text-gray-400">
+                      Emergency access codes for your account
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-6">
+                <div className="flex items-start gap-4 mb-6">
+                  <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center shrink-0">
+                    <svg
+                      className="w-6 h-6 text-purple-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-white mb-2">
+                      What are backup codes?
+                    </h3>
+                    <p className="text-gray-300 mb-4">
+                      Backup codes are one-time-use codes that can be used
+                      instead of your authenticator app code. Generate a set of
+                      10 backup codes and store them safely in case you lose
+                      access to your authenticator device.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowBackupCodesPasswordModal(true)}
+                  className="px-6 py-3 font-semibold text-white bg-linear-to-r from-purple-600 to-pink-600 rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-[1.02] shadow-lg hover:shadow-purple-500/50 flex items-center gap-2"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                    />
+                  </svg>
+                  Generate Backup Codes
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Delete Account Section */}
           <div
             className="glass p-8 rounded-2xl shadow-2xl border-2 border-red-500/30 animate-slide-up"
@@ -606,6 +795,250 @@ export default function SecurityPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Disable 2FA Confirmation Modal */}
+      {showDisable2FAModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="glass p-8 rounded-2xl shadow-2xl max-w-md w-full border-2 border-yellow-500/30 animate-slide-up">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-14 h-14 bg-yellow-500/20 rounded-xl flex items-center justify-center shrink-0">
+                <svg
+                  className="w-8 h-8 text-yellow-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-yellow-400">
+                Disable 2FA?
+              </h2>
+            </div>
+
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-6">
+              <p className="text-gray-300 text-sm">
+                <strong className="text-white">
+                  This will reduce your account security.
+                </strong>{" "}
+                You will no longer need an authenticator code to sign in. We
+                recommend keeping 2FA enabled for better protection.
+              </p>
+            </div>
+
+            <div className="mb-6">
+              <label className="block mb-2 text-sm font-medium text-gray-300">
+                Confirm your password to continue:
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                  <svg
+                    className="w-5 h-5 text-gray-500"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                    />
+                  </svg>
+                </div>
+                <input
+                  type="password"
+                  value={disable2FAPassword}
+                  onChange={(e) => setDisable2FAPassword(e.target.value)}
+                  className="w-full pl-10 p-3 bg-gray-700/50 backdrop-blur-sm rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent text-white placeholder-gray-400 transition-all"
+                  placeholder="Enter your password"
+                />
+              </div>
+            </div>
+
+            {disable2FAError && (
+              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg animate-slide-in">
+                <p className="text-red-400 text-sm flex items-center gap-2">
+                  <svg
+                    className="w-4 h-4"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  {disable2FAError}
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowDisable2FAModal(false);
+                  setDisable2FAPassword("");
+                  setDisable2FAError(null);
+                }}
+                className="flex-1 px-6 py-3 font-semibold text-gray-300 glass-light rounded-lg hover:bg-gray-600/50 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDisable2FA}
+                className="flex-1 px-6 py-3 font-semibold text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 transition-all flex items-center justify-center gap-2"
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+                Disable 2FA
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Backup Codes Password Confirmation Modal */}
+      {showBackupCodesPasswordModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="glass p-8 rounded-2xl shadow-2xl max-w-md w-full border-2 border-purple-500/30 animate-slide-up">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-14 h-14 bg-purple-500/20 rounded-xl flex items-center justify-center shrink-0">
+                <svg
+                  className="w-8 h-8 text-purple-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-purple-400">
+                Generate Backup Codes
+              </h2>
+            </div>
+
+            <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4 mb-6">
+              <p className="text-gray-300 text-sm">
+                <strong className="text-white">For security reasons,</strong>{" "}
+                please confirm your password to generate new backup codes. Any
+                previously generated codes will be invalidated.
+              </p>
+            </div>
+
+            <div className="mb-6">
+              <label className="block mb-2 text-sm font-medium text-gray-300">
+                Confirm your password to continue:
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                  <svg
+                    className="w-5 h-5 text-gray-500"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                    />
+                  </svg>
+                </div>
+                <input
+                  type="password"
+                  value={backupCodesPassword}
+                  onChange={(e) => setBackupCodesPassword(e.target.value)}
+                  className="w-full pl-10 p-3 bg-gray-700/50 backdrop-blur-sm rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-gray-400 transition-all"
+                  placeholder="Enter your password"
+                />
+              </div>
+            </div>
+
+            {backupCodesPasswordError && (
+              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg animate-slide-in">
+                <p className="text-red-400 text-sm flex items-center gap-2">
+                  <svg
+                    className="w-4 h-4"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  {backupCodesPasswordError}
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowBackupCodesPasswordModal(false);
+                  setBackupCodesPassword("");
+                  setBackupCodesPasswordError(null);
+                }}
+                className="flex-1 px-6 py-3 font-semibold text-gray-300 glass-light rounded-lg hover:bg-gray-600/50 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleGenerateBackupCodes}
+                className="flex-1 px-6 py-3 font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-all flex items-center justify-center gap-2"
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                  />
+                </svg>
+                Generate Codes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Backup Codes Display Modal */}
+      {generatedBackupCodes && (
+        <BackupCodesModal
+          codes={generatedBackupCodes}
+          onClose={() => setGeneratedBackupCodes(null)}
+        />
       )}
     </>
   );

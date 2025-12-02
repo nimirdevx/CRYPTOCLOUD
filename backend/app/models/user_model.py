@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field,EmailStr
 from bson import ObjectId
-from typing import Optional
+from typing import Optional, List
 
 class PyObjectId(ObjectId):
     @classmethod
@@ -23,17 +23,21 @@ class UserCreate(BaseModel):
     password: str
     publicKey: str  # The user's public key (base64 string)
     encryptedPrivateKey: str # The user's private key (encrypted with their password)
+    email: EmailStr
     
 class User(BaseModel):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
     username: str
     hashed_password: str
+    email: EmailStr
     
     is_2fa_enabled: bool = Field(default=False)
     totp_secret: Optional[str] = None
     
     publicKey: Optional[str] = None
     encryptedPrivateKey: Optional[str] = None
+    
+    backup_codes: Optional[List[str]] = None
 
     class Config:
         from_attributes = True

@@ -10,6 +10,8 @@ import {
   encryptFileKey,
   decryptFileKey,
 } from "../lib/crypto";
+import { uploadToS3WithProgress } from "../lib/upload";
+import { useDragAndDrop } from "../hooks/useDragAndDrop";
 import Link from "next/link";
 import { FileItemSkeleton } from "../components/SkeletonLoader";
 import { StorageQuotaBar } from "../components/StorageQuotaBar";
@@ -79,6 +81,13 @@ export default function DashboardPage() {
 
   // --- 2. ADD NEW STATE FOR THE SHARE MODAL ---
   const [fileToShare, setFileToShare] = useState<FileMetadata | null>(null);
+
+  // --- Initialize drag-and-drop functionality ---
+  const handleFileSelect = (file: File) => {
+    setSelectedFile(file);
+  };
+
+  const dragAndDrop = useDragAndDrop(handleFileSelect);
 
   // Filter files based on search query
   const filteredFiles = files
@@ -195,15 +204,16 @@ export default function DashboardPage() {
 
       const { upload_url, s3_key } = await requestUploadResponse.json();
 
-      // --- Step 2: Upload encrypted file to S3 ---
+      // --- Step 2: Upload encrypted file to S3 with REAL progress tracking ---
       setMessage("Uploading file...");
       setUploadProgress(60);
-      const uploadToS3Response = await fetch(upload_url, {
-        method: "PUT",
-        headers: { "Content-Type": "application/octet-stream" },
-        body: encryptedBlob,
+
+      await uploadToS3WithProgress(upload_url, encryptedBlob, (percentage) => {
+        // Map the S3 upload progress (0-100%) to our overall progress (60-80%)
+        const mappedProgress = 60 + percentage * 0.2;
+        setUploadProgress(Math.round(mappedProgress));
+        setMessage(`Uploading file... ${percentage}%`);
       });
-      if (!uploadToS3Response.ok) throw new Error("File upload to S3 failed.");
 
       // --- Step 3: Finalize Upload (UPDATED) ---
       setMessage("Finalizing upload...");
@@ -589,6 +599,11 @@ export default function DashboardPage() {
           onFileChange={handleFileChange}
           onUpload={handleUpload}
           currentFolderName={folderPath[folderPath.length - 1].name}
+          isDragging={dragAndDrop.isDragging}
+          onDragEnter={dragAndDrop.handleDragEnter}
+          onDragOver={dragAndDrop.handleDragOver}
+          onDragLeave={dragAndDrop.handleDragLeave}
+          onDrop={dragAndDrop.handleDrop}
         />
 
         {/* Sharing Quick Access Cards */}

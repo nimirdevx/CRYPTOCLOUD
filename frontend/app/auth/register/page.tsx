@@ -19,6 +19,7 @@ const API_URL = "http://127.0.0.1:8000";
 
 export default function RegisterPage() {
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -65,6 +66,7 @@ export default function RegisterPage() {
         body: JSON.stringify({
           username,
           password,
+          email: email,
           publicKey: publicKeyString, // Send the new public key
           encryptedPrivateKey: encryptedPrivateKeyString, // Send the new encrypted private key
         }),
@@ -183,6 +185,37 @@ export default function RegisterPage() {
               onChange={(e) => setUsername(e.target.value)}
               className="w-full pl-10 p-3 bg-gray-700/50 backdrop-blur-sm rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-gray-400 transition-all"
               placeholder="Choose a username"
+              required
+            />
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <label className="block mb-2 text-sm font-medium text-gray-300">
+            Email
+          </label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <svg
+                className="w-5 h-5 text-gray-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                />
+              </svg>
+            </div>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full pl-10 p-3 bg-gray-700/50 backdrop-blur-sm rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-gray-400 transition-all"
+              placeholder="Enter your email"
               required
             />
           </div>
