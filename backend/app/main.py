@@ -7,15 +7,22 @@ app = FastAPI(title="CryptoCloud API")
 app.include_router(auth_routes.router, prefix="/auth", tags=["Authentication"])
 app.include_router(file_routes.router, prefix="/files", tags=["Files"])
 app.include_router(share_routes.router, prefix="/share", tags=["Sharing"])
+origins = [
+    "http://localhost:3000",                # For local testing
+    "https://cryptocloud.vercel.app",       # Your main production domain
+    "https://cryptocloud-frontend.vercel.app", # Default Vercel alias
+    # WILDCARD: Allows ALL Vercel preview/deployment URLs (Safe for this stage)
+    "https://cryptocloud-*.vercel.app"
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # The origin of your Next.js app
+    allow_origins=origins,   # <--- Updated list
+    # allow_origins=["*"],   # ALTERNATIVE: Use this temporarily if you are stuck
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods (GET, POST, etc.)
-    allow_headers=["*"],  # Allows all headers (Content-Type, Authorization, etc.)
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-
 @app.get("/")
 def read_root():
     return {"message": "Welcome to CryptoCloud"}
