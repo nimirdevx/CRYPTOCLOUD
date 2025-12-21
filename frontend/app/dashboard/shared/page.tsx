@@ -6,7 +6,7 @@ import { decryptData, unwrapFileKey } from "@/app/lib/crypto";
 import { FileItemSkeleton } from "@/app/components/SkeletonLoader";
 import Link from "next/link";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 // This is the new response type from our API
 interface SharedFileResponse {

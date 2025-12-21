@@ -13,7 +13,7 @@ export default function PasswordPrompt() {
   // 2. Get 'jwt' and update 'unlock'
   const { unlock, logout, jwt } = useAuth();
 
-  const API_URL = "http://127.0.0.1:8000";
+  const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

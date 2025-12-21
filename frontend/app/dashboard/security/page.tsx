@@ -7,7 +7,7 @@ import Link from "next/link";
 import Image from "next/image";
 import BackupCodesModal from "@/app/components/BackupCodesModal";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export default function SecurityPage() {
   const { jwt, is2FAEnabled, logout, update2FAStatus } = useAuth();
