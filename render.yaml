@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: cryptocloud-api
+    runtime: docker
+    repo: https://github.com/nimirdevx/CRYPTOCLOUD
+    branch: release/v2.0-rc
+    rootDir: backend
+    
+    # We list the KEYS here so Render knows what to ask for.
+    # sync: false means "Don't put the password in this file, ask me in the dashboard"
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: JWT_EXP
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET_NAME
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: MAIL_PORT
+        sync: false
+      - key: MAIL_SERVER
+        sync: false
+      - key: MAIL_STARTTLS
+        sync: false
+      - key: MAIL_SSL_TLS
+        sync: false
