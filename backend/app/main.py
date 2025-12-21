@@ -7,12 +7,14 @@ app = FastAPI(title="CryptoCloud API")
 app.include_router(auth_routes.router, prefix="/auth", tags=["Authentication"])
 app.include_router(file_routes.router, prefix="/files", tags=["Files"])
 app.include_router(share_routes.router, prefix="/share", tags=["Sharing"])
+
 origins = [
-    "http://localhost:3000",                # For local testing
-    "https://cryptocloud.vercel.app",       # Your main production domain
-    "https://cryptocloud-frontend.vercel.app", # Default Vercel alias
-    # WILDCARD: Allows ALL Vercel preview/deployment URLs (Safe for this stage)
-    "https://cryptocloud-*.vercel.app"
+    "http://localhost:3000",
+    # Add your NEW domain here exactly as it appears in the browser:
+    "https://nimir-cryptocloud.vercel.app", 
+    
+    # (Optional) Keep the wildcard for future preview branches
+    "https://*.vercel.app"
 ]
 
 app.add_middleware(
