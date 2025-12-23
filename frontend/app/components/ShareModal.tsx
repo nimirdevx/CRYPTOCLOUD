@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { decryptFileKey, importPublicKey, wrapFileKey } from "../lib/crypto";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+import { createShareService } from "../services/shareService";
 
 interface FileMetadata {
   id: string;
@@ -22,11 +21,10 @@ interface UserSearchResult {
 interface ShareModalProps {
   file: FileMetadata | null;
   onClose: () => void;
-  authFetch: (url: string, options?: RequestInit) => Promise<Response>;
 }
 
-export const ShareModal = ({ file, onClose, authFetch }: ShareModalProps) => {
-  const { encryptionKey } = useAuth(); // This is the user's Master Key
+export const ShareModal = ({ file, onClose }: ShareModalProps) => {
+  const { encryptionKey, jwt } = useAuth(); // Get both encryptionKey and jwt
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserSearchResult | null>(
@@ -44,13 +42,14 @@ export const ShareModal = ({ file, onClose, authFetch }: ShareModalProps) => {
       return;
     }
 
+    if (!jwt) {
+      return;
+    }
+
     const delayDebounce = setTimeout(async () => {
       try {
-        const response = await authFetch(
-          `${API_URL}/share/users/search?username=${searchQuery}`
-        );
-        if (!response.ok) throw new Error("Search failed");
-        const data: UserSearchResult[] = await response.json();
+        const shareService = createShareService(jwt);
+        const data = await shareService.searchUsers(searchQuery);
         setSearchResults(data);
       } catch (err) {
         console.error(err);
@@ -58,10 +57,10 @@ export const ShareModal = ({ file, onClose, authFetch }: ShareModalProps) => {
     }, 300); // 300ms delay
 
     return () => clearTimeout(delayDebounce);
-  }, [searchQuery, authFetch]);
+  }, [searchQuery, jwt]);
 
   const handleShare = async () => {
-    if (!file || !selectedUser || !encryptionKey) {
+    if (!file || !selectedUser || !encryptionKey || !jwt) {
       setError("Missing file, user, or master key.");
       return;
     }
@@ -89,23 +88,9 @@ export const ShareModal = ({ file, onClose, authFetch }: ShareModalProps) => {
       const sharedKey = await wrapFileKey(recipientPublicKey, fileKey);
       // ---------------------------------------------
 
-      // 4. Send the new shared key to the server
-      const response = await authFetch(
-        `${API_URL}/share/files/${file.id}/share`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            recipientUsername: selectedUser.username,
-            encryptedFileKey: sharedKey,
-          }),
-        }
-      );
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.detail || "Failed to share file.");
-      }
+      // 4. Send the new shared key to the server using ShareService
+      const shareService = createShareService(jwt);
+      await shareService.shareFile(file.id, selectedUser.username, sharedKey);
 
       setMessage(`Successfully shared with ${selectedUser.username}!`);
       setTimeout(onClose, 2000); // Close modal on success

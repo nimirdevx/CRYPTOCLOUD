@@ -1,16 +1,9 @@
 "use client";
 
-import { useState, useEffect, ChangeEvent } from "react";
+import { useState, ChangeEvent } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "next/navigation";
-import {
-  encryptData,
-  decryptData,
-  generateRandomAesKey,
-  encryptFileKey,
-  decryptFileKey,
-} from "../lib/crypto";
-import { uploadToS3WithProgress } from "../lib/upload";
+import { useFileManager } from "../hooks/useFileManager";
 import { useDragAndDrop } from "../hooks/useDragAndDrop";
 import Link from "next/link";
 import { FileItemSkeleton } from "../components/SkeletonLoader";
@@ -20,69 +13,53 @@ import { FileListHeader } from "../components/FileListHeader";
 import { FileItem } from "../components/FileItem";
 import { DeleteConfirmationModal } from "../components/DeleteConfirmationModal";
 import { PreviewModal } from "../components/PreviewModal";
-import { ShareModal } from "../components/ShareModal"; // 1. Import ShareModal
-
-// API URL
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
-// Type for our file metadata
-interface FileMetadata {
-  id: string;
-  filename: string;
-  owner_id: string;
-  upload_time: string;
-  file_size: number;
-  isFolder: boolean;
-  parentId: string | null;
-  encryptedFileKey: string | null;
-}
-
-// Breadcrumb interface
-interface Breadcrumb {
-  id: string | null;
-  name: string;
-}
-
-// Storage quota interface
-interface StorageUsage {
-  used: number;
-  quota: number;
-}
+import { ShareModal } from "../components/ShareModal";
+import { FileMetadata } from "../types";
 
 export default function DashboardPage() {
-  const { jwt, encryptionKey, logout } = useAuth();
+  const { jwt, logout } = useAuth();
   const router = useRouter();
 
-  const [files, setFiles] = useState<FileMetadata[]>([]);
+  // Use the file manager hook
+  const {
+    files,
+    storageUsage,
+    isLoading,
+    isUploading,
+    isFetchingFiles,
+    uploadProgress,
+    message,
+    error,
+    currentFolderId,
+    folderPath,
+    loadingFileId,
+    loadingMessage,
+    uploadFile,
+    downloadFile,
+    previewFile,
+    deleteFile,
+    renameFile,
+    createFolder,
+    navigateToFolder,
+    navigateToBreadcrumb,
+    setError,
+  } = useFileManager();
+
+  // Local UI state
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [isFetchingFiles, setIsFetchingFiles] = useState(true);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [fileToDelete, setFileToDelete] = useState<FileMetadata | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [storageUsage, setStorageUsage] = useState<StorageUsage | null>(null);
   const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
   const [newFilename, setNewFilename] = useState("");
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewFilename, setPreviewFilename] = useState<string>("");
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
-  const [folderPath, setFolderPath] = useState<Breadcrumb[]>([
-    { id: null, name: "Home" },
-  ]);
-  const [loadingFileId, setLoadingFileId] = useState<string | null>(null);
-  const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
-
-  // --- 2. ADD NEW STATE FOR THE SHARE MODAL ---
   const [fileToShare, setFileToShare] = useState<FileMetadata | null>(null);
 
-  // --- Initialize drag-and-drop functionality ---
+  // Initialize drag-and-drop functionality
   const handleFileSelect = (file: File) => {
     setSelectedFile(file);
   };
@@ -105,287 +82,39 @@ export default function DashboardPage() {
   const foldersCount = files.filter((file) => file.isFolder).length;
   const actualFilesCount = files.filter((file) => !file.isFolder).length;
 
-  // --- Helper: Authenticated Fetch ---
-  const authFetch = (url: string, options: RequestInit = {}) => {
-    if (!jwt) throw new Error("Not authenticated");
-    return fetch(url, {
-      ...options,
-      headers: { ...options.headers, Authorization: `Bearer ${jwt}` },
-    });
-  };
-
-  // --- Unified data fetching function ---
-  const fetchData = async (folderId: string | null = null) => {
-    if (!jwt) return;
-    try {
-      const query = new URLSearchParams();
-      if (folderId) {
-        query.append("parentId", folderId);
-      }
-      const filesResponse = await authFetch(
-        `${API_URL}/files/?${query.toString()}`
-      );
-      if (!filesResponse.ok) throw new Error("Failed to fetch files.");
-      const filesData: FileMetadata[] = await filesResponse.json();
-      setFiles(filesData);
-
-      const storageResponse = await authFetch(
-        `${API_URL}/files/users/me/storage`
-      );
-      if (!storageResponse.ok) throw new Error("Failed to fetch storage.");
-      const storageData: StorageUsage = await storageResponse.json();
-      setStorageUsage(storageData);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsFetchingFiles(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData(currentFolderId);
-  }, [jwt, currentFolderId]);
-
-  // --- Handle File Selection ---
+  // Handle file selection
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setSelectedFile(e.target.files[0]);
     }
   };
 
-  // --- Handle Upload ---
+  // Handle upload
   const handleUpload = async () => {
-    if (!selectedFile || !jwt || !encryptionKey) {
-      setError("File, JWT, or Master Key is missing.");
-      return;
-    }
+    if (!selectedFile) return;
 
-    setIsUploading(true);
-    setError(null);
-    setUploadProgress(0);
-    setMessage("Starting upload...");
+    await uploadFile(selectedFile);
+    setSelectedFile(null);
 
-    try {
-      // --- Step 0a: Generate a NEW, unique key for this file ---
-      setMessage("Generating file key...");
-      const fileKey = await generateRandomAesKey();
-
-      // --- Step 0b: Read and Encrypt the file using the NEW fileKey ---
-      setMessage("Encrypting file...");
-      setUploadProgress(10);
-      const fileBuffer = await selectedFile.arrayBuffer();
-      const encryptedBuffer = await encryptData(fileKey, fileBuffer); // Encrypt with fileKey
-      const encryptedBlob = new Blob([encryptedBuffer]);
-
-      // --- Step 0c: Encrypt the fileKey with the MASTER key ---
-      setMessage("Securing file key...");
-      setUploadProgress(20);
-      const encryptedFileKeyString = await encryptFileKey(
-        encryptionKey,
-        fileKey
-      ); // Encrypt fileKey with masterKey
-
-      // --- Step 1: Request Upload URL ---
-      setMessage("Requesting upload location...");
-      setUploadProgress(40);
-      const requestUploadResponse = await authFetch(
-        `${API_URL}/files/request-upload-url`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            filename: selectedFile.name,
-            content_type: "application/octet-stream",
-          }),
-        }
-      );
-      if (!requestUploadResponse.ok)
-        throw new Error("Could not get upload URL.");
-
-      const { upload_url, s3_key } = await requestUploadResponse.json();
-
-      // --- Step 2: Upload encrypted file to S3 with REAL progress tracking ---
-      setMessage("Uploading file...");
-      setUploadProgress(60);
-
-      await uploadToS3WithProgress(upload_url, encryptedBlob, (percentage) => {
-        // Map the S3 upload progress (0-100%) to our overall progress (60-80%)
-        const mappedProgress = 60 + percentage * 0.2;
-        setUploadProgress(Math.round(mappedProgress));
-        setMessage(`Uploading file... ${percentage}%`);
-      });
-
-      // --- Step 3: Finalize Upload (UPDATED) ---
-      setMessage("Finalizing upload...");
-      setUploadProgress(80);
-      const finalizeResponse = await authFetch(
-        `${API_URL}/files/finalize-upload`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            filename: selectedFile.name,
-            s3_key: s3_key,
-            file_size: selectedFile.size,
-            parentId: currentFolderId,
-            encryptedFileKey: encryptedFileKeyString, // <-- SEND THE KEY
-          }),
-        }
-      );
-      if (!finalizeResponse.ok) throw new Error("Failed to finalize upload.");
-
-      setUploadProgress(100);
-      setMessage("Upload complete!");
-      setSelectedFile(null);
-
-      const fileInput = document.querySelector(
-        'input[type="file"]'
-      ) as HTMLInputElement;
-      if (fileInput) fileInput.value = "";
-
-      await fetchData(currentFolderId);
-    } catch (err: any) {
-      setError(err.message);
-      setUploadProgress(0);
-    } finally {
-      setIsUploading(false);
-      setTimeout(() => {
-        setMessage(null);
-        setUploadProgress(0);
-      }, 3000);
-    }
+    const fileInput = document.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
+    if (fileInput) fileInput.value = "";
   };
 
-  // --- Handle Download ---
-  const handleDownload = async (file: FileMetadata) => {
-    if (!jwt || !encryptionKey) {
-      setError("JWT or Master Key is missing.");
-      return;
-    }
-    if (!file.encryptedFileKey) {
-      // Sanity check
-      setError("File key is missing. Cannot decrypt.");
-      return;
-    }
-
-    setLoadingFileId(file.id);
-    setLoadingMessage("Downloading...");
-    setError(null);
-
-    try {
-      // --- Step 1: Request Download URL ---
-      const response = await authFetch(
-        `${API_URL}/files/download-url/${file.id}`
-      );
-      if (!response.ok) throw new Error("Could not get download URL.");
-
-      const { download_url } = await response.json();
-
-      // --- Step 2: Download the ENCRYPTED file from S3 ---
-      setLoadingMessage("File downloading...");
-      const s3Response = await fetch(download_url);
-      if (!s3Response.ok) throw new Error("File download from S3 failed.");
-
-      const encryptedBuffer = await s3Response.arrayBuffer();
-
-      // --- Step 3a: Decrypt the FILE KEY ---
-      setLoadingMessage("Unlocking file key...");
-      const fileKey = await decryptFileKey(
-        encryptionKey,
-        file.encryptedFileKey
-      );
-
-      // --- Step 3b: Decrypt the FILE DATA ---
-      setLoadingMessage("Decrypting file...");
-      const decryptedBuffer = await decryptData(fileKey, encryptedBuffer);
-
-      // --- Success! Offer file to user ---
-      const blob = new Blob([decryptedBuffer]);
-      const link = document.createElement("a");
-      link.href = window.URL.createObjectURL(blob);
-      link.download = file.filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoadingFileId(null);
-      setLoadingMessage(null);
-    }
-  };
-
-  // --- Handle Preview ---
+  // Handle preview
   const handlePreview = async (file: FileMetadata) => {
-    if (!jwt || !encryptionKey) {
-      setError("JWT or Master Key is missing.");
-      return;
-    }
-    if (!file.encryptedFileKey) {
-      // Sanity check
-      setError("File key is missing. Cannot decrypt.");
-      return;
-    }
-
-    setLoadingFileId(file.id);
-    setLoadingMessage("Loading preview...");
-    setError(null);
-
     try {
-      // --- Step 1: Request Download URL ---
-      const response = await authFetch(
-        `${API_URL}/files/download-url/${file.id}`
-      );
-      if (!response.ok) throw new Error("Could not get download URL.");
-
-      const { download_url } = await response.json();
-
-      // --- Step 2: Download the ENCRYPTED file from S3 ---
-      setLoadingMessage("File downloading...");
-      const s3Response = await fetch(download_url);
-      if (!s3Response.ok) throw new Error("File download from S3 failed.");
-
-      const encryptedBuffer = await s3Response.arrayBuffer();
-
-      // --- Step 3a: Decrypt the FILE KEY ---
-      setLoadingMessage("Unlocking file key...");
-      const fileKey = await decryptFileKey(
-        encryptionKey,
-        file.encryptedFileKey
-      );
-
-      // --- Step 3b: Decrypt the FILE DATA ---
-      setLoadingMessage("Decrypting file...");
-      const decryptedBuffer = await decryptData(fileKey, encryptedBuffer);
-
-      // --- Success! Show preview ---
-      // Determine MIME type based on file extension
-      const ext = file.filename.split(".").pop()?.toLowerCase() || "";
-      let mimeType = "application/octet-stream";
-
-      if (["jpg", "jpeg"].includes(ext)) mimeType = "image/jpeg";
-      else if (ext === "png") mimeType = "image/png";
-      else if (ext === "gif") mimeType = "image/gif";
-      else if (ext === "svg") mimeType = "image/svg+xml";
-      else if (ext === "webp") mimeType = "image/webp";
-      else if (ext === "bmp") mimeType = "image/bmp";
-      else if (ext === "pdf") mimeType = "application/pdf";
-
-      const blob = new Blob([decryptedBuffer], { type: mimeType });
-      const objectUrl = URL.createObjectURL(blob);
-
-      setPreviewUrl(objectUrl);
-      setPreviewFilename(file.filename);
+      const { url, filename } = await previewFile(file);
+      setPreviewUrl(url);
+      setPreviewFilename(filename);
       setShowPreviewModal(true);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoadingFileId(null);
-      setLoadingMessage(null);
+    } catch (err) {
+      // Error is already set by the hook
     }
   };
 
-  // --- Handle Preview Modal Close ---
+  // Handle preview modal close
   const handleClosePreview = () => {
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
@@ -395,40 +124,20 @@ export default function DashboardPage() {
     setShowPreviewModal(false);
   };
 
-  // --- Handle Delete ---
+  // Handle delete
   const handleDelete = async (file: FileMetadata) => {
-    setIsLoading(true);
-    setError(null);
-    setMessage(`Deleting ${file.filename}...`);
-
-    try {
-      const response = await authFetch(`${API_URL}/files/${file.id}`, {
-        method: "DELETE",
-      });
-
-      if (response.status === 204) {
-        setMessage("File deleted successfully.");
-        await fetchData(currentFolderId);
-      } else {
-        const data = await response.json();
-        throw new Error(data.detail || "Failed to delete file.");
-      }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-      setShowDeleteModal(false);
-      setFileToDelete(null);
-    }
+    await deleteFile(file.id);
+    setShowDeleteModal(false);
+    setFileToDelete(null);
   };
 
-  // --- Handle Logout ---
+  // Handle logout
   const handleLogout = () => {
     logout();
     router.push("/login");
   };
 
-  // --- Handle Rename ---
+  // Handle rename
   const startRename = (file: FileMetadata) => {
     setRenamingFileId(file.id);
     setNewFilename(file.filename);
@@ -445,77 +154,30 @@ export default function DashboardPage() {
       return;
     }
 
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await authFetch(`${API_URL}/files/${file.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ new_filename: newFilename }),
-      });
-
-      if (!response.ok) {
-        const updatedFile = await response.json();
-        throw new Error(updatedFile.detail || "Failed to rename file.");
-      }
-
-      const updatedFile = await response.json();
-      setFiles(files.map((f) => (f.id === file.id ? updatedFile : f)));
-      setMessage("File renamed successfully.");
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-      cancelRename();
-    }
+    await renameFile(file.id, newFilename);
+    cancelRename();
   };
 
-  // --- Handle Create Folder ---
+  // Handle create folder
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) {
       setError("Folder name cannot be empty.");
       return;
     }
 
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await authFetch(`${API_URL}/files/folders`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newFolderName,
-          parentId: currentFolderId,
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || "Failed to create folder.");
-      }
-
-      setMessage("Folder created successfully.");
-      setShowCreateFolderModal(false);
-      setNewFolderName("");
-      await fetchData(currentFolderId);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
+    await createFolder(newFolderName);
+    setShowCreateFolderModal(false);
+    setNewFolderName("");
   };
 
-  // --- Handle Folder Click (Navigation) ---
+  // Handle folder click (navigation)
   const handleFolderClick = (folder: FileMetadata) => {
-    setCurrentFolderId(folder.id);
-    setFolderPath([...folderPath, { id: folder.id, name: folder.filename }]);
+    navigateToFolder(folder);
   };
 
-  // --- Handle Breadcrumb Click ---
+  // Handle breadcrumb click
   const handleBreadcrumbClick = (index: number) => {
-    const newPath = folderPath.slice(0, index + 1);
-    setFolderPath(newPath);
-    setCurrentFolderId(newPath[newPath.length - 1].id);
+    navigateToBreadcrumb(index);
   };
 
   return (
@@ -772,10 +434,7 @@ export default function DashboardPage() {
             searchQuery={searchQuery}
             isFetchingFiles={isFetchingFiles}
             onSearchChange={setSearchQuery}
-            onRefresh={() => {
-              setIsFetchingFiles(true);
-              fetchData(currentFolderId);
-            }}
+            onRefresh={() => window.location.reload()}
           />
 
           <div className="space-y-3">
@@ -827,7 +486,7 @@ export default function DashboardPage() {
                   onRenameSubmit={() => submitRename(file)}
                   onRenameCancel={cancelRename}
                   onPreview={() => handlePreview(file)}
-                  onDownload={() => handleDownload(file)}
+                  onDownload={() => downloadFile(file)}
                   onDelete={() => {
                     setFileToDelete(file);
                     setShowDeleteModal(true);
@@ -835,7 +494,7 @@ export default function DashboardPage() {
                   onFolderClick={() => handleFolderClick(file)}
                   loadingFileId={loadingFileId}
                   loadingMessage={loadingMessage}
-                  onShare={() => setFileToShare(file)} // --- 4. ADD onShare PROP ---
+                  onShare={() => setFileToShare(file)}
                 />
               ))
             )}
@@ -953,13 +612,9 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* --- 5. ADD THE SHARE MODAL RENDER --- */}
+      {/* Share Modal */}
       {fileToShare && (
-        <ShareModal
-          file={fileToShare}
-          authFetch={authFetch}
-          onClose={() => setFileToShare(null)}
-        />
+        <ShareModal file={fileToShare} onClose={() => setFileToShare(null)} />
       )}
     </div>
   );

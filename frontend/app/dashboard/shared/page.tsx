@@ -1,148 +1,50 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useAuth } from "@/app/context/AuthContext";
-import { decryptData, unwrapFileKey } from "@/app/lib/crypto";
+import { useSharedFiles } from "@/app/hooks/useSharedFiles";
+import { formatBytes, formatDate } from "@/app/utils/format";
 import { FileItemSkeleton } from "@/app/components/SkeletonLoader";
 import Link from "next/link";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
-// This is the new response type from our API
-interface SharedFileResponse {
-  id: string; // Share ID
-  file_id: string;
-  filename: string;
-  file_size: number;
-  owner_username: string;
-  shared_at: string; // Will be an ISO string
-  encryptedFileKey: string;
-}
-
 export default function SharedWithMePage() {
-  const { jwt, privateKey } = useAuth(); // We need the PRIVATE KEY to decrypt
-  const [sharedFiles, setSharedFiles] = useState<SharedFileResponse[]>([]);
-  const [isFetching, setIsFetching] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [loadingFileId, setLoadingFileId] = useState<string | null>(null);
-
-  // Helper for authenticated fetch
-  const authFetch = (url: string, options: RequestInit = {}) => {
-    if (!jwt) throw new Error("Not authenticated");
-    return fetch(url, {
-      ...options,
-      headers: { ...options.headers, Authorization: `Bearer ${jwt}` },
-    });
-  };
-
-  // 1. Fetch shared files on load
-  useEffect(() => {
-    if (!jwt) return;
-
-    const fetchSharedFiles = async () => {
-      setIsFetching(true);
-      setError(null);
-      try {
-        const response = await authFetch(`${API_URL}/share/shared-with-me`);
-        if (!response.ok) {
-          throw new Error("Failed to fetch shared files.");
-        }
-        const data: SharedFileResponse[] = await response.json();
-        setSharedFiles(data);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setIsFetching(false);
-      }
-    };
-
-    fetchSharedFiles();
-  }, [jwt]);
-
-  // 2. Handle the download of a shared file
-  const handleSharedDownload = async (file: SharedFileResponse) => {
-    if (!jwt || !privateKey) {
-      setError("JWT or Private Key is missing.");
-      return;
-    }
-
-    setLoadingFileId(file.file_id);
-    setError(null);
-
-    try {
-      // --- This is the Core Sharing Crypto Flow ---
-      // 1. Decrypt the file's AES key using *our* RSA Private Key
-      const fileKey = await unwrapFileKey(privateKey, file.encryptedFileKey);
-
-      // 2. Get the S3 download URL
-      const urlResponse = await authFetch(
-        `${API_URL}/files/download-url/${file.file_id}`
-      );
-      if (!urlResponse.ok) throw new Error("Could not get download URL.");
-      const { download_url } = await urlResponse.json();
-
-      // 3. Download the encrypted file from S3
-      const s3Response = await fetch(download_url);
-      if (!s3Response.ok) throw new Error("File download from S3 failed.");
-      const encryptedBuffer = await s3Response.arrayBuffer();
-
-      // 4. Decrypt the file data using the unwrapped file key
-      const decryptedBuffer = await decryptData(fileKey, encryptedBuffer);
-
-      // 5. Offer to user
-      const blob = new Blob([decryptedBuffer]);
-      const link = document.createElement("a");
-      link.href = window.URL.createObjectURL(blob);
-      link.download = file.filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (err: any) {
-      setError("Decryption failed. The key may be invalid or corrupted.");
-      console.error(err);
-    } finally {
-      setLoadingFileId(null);
-    }
-  };
-
-  // Helper to format bytes
-  const formatBytes = (bytes: number, decimals = 2) => {
-    if (bytes === 0) return "0 B";
-    const k = 1024;
-    const dm = decimals < 0 ? 0 : decimals;
-    const sizes = ["B", "KB", "MB", "GB", "TB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
-  };
-
-  // Helper to format date
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  const {
+    sharedFiles,
+    isFetching,
+    error,
+    loadingFileId,
+    downloadSharedFile,
+    setError,
+  } = useSharedFiles();
 
   return (
     <div className="min-h-screen bg-linear-to-br from-gray-900 via-gray-800 to-gray-900 p-4 md:p-10">
-      <div className="max-w-6xl mx-auto space-y-8">
+      <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-white mb-2">
+            <h1 className="text-4xl font-bold text-white mb-2 flex items-center gap-3">
+              <svg
+                className="w-10 h-10 text-indigo-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                />
+              </svg>
               Shared With Me
             </h1>
             <p className="text-gray-400">
               Files that others have shared with you
             </p>
           </div>
+
           <Link
             href="/dashboard"
-            className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors duration-200 flex items-center gap-2"
+            className="px-5 py-2.5 font-semibold text-white glass rounded-lg hover:bg-gray-600/50 transition-all flex items-center gap-2 cursor-pointer"
           >
             <svg
               className="w-5 h-5"
@@ -163,10 +65,10 @@ export default function SharedWithMePage() {
 
         {/* Error Message */}
         {error && (
-          <div className="glass-light border-l-4 border-red-500 p-4 rounded-xl">
-            <div className="flex items-center gap-3">
+          <div className="mb-6 p-4 bg-red-600/20 border border-red-600/50 rounded-lg text-red-200 flex items-center justify-between">
+            <div className="flex items-center gap-2">
               <svg
-                className="w-6 h-6 text-red-400"
+                className="w-5 h-5"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -178,23 +80,14 @@ export default function SharedWithMePage() {
                   d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              <p className="text-red-300">{error}</p>
+              <span>{error}</span>
             </div>
-          </div>
-        )}
-
-        {/* File List */}
-        <div className="glass p-6 rounded-2xl shadow-2xl">
-          {isFetching ? (
-            <div className="space-y-4">
-              <FileItemSkeleton />
-              <FileItemSkeleton />
-              <FileItemSkeleton />
-            </div>
-          ) : sharedFiles.length === 0 ? (
-            <div className="text-center py-12">
+            <button
+              onClick={() => setError(null)}
+              className="text-red-200 hover:text-white"
+            >
               <svg
-                className="w-20 h-20 text-gray-600 mx-auto mb-4"
+                className="w-5 h-5"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -203,153 +96,154 @@ export default function SharedWithMePage() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                  d="M6 18L18 6M6 6l12 12"
                 />
               </svg>
-              <h3 className="text-xl font-semibold text-gray-400 mb-2">
-                No shared files yet
-              </h3>
-              <p className="text-gray-500">
-                Files shared with you will appear here
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {/* Header */}
-              <div className="grid grid-cols-12 gap-4 px-4 py-2 text-sm font-medium text-gray-400 border-b border-gray-700">
-                <div className="col-span-5">File Name</div>
-                <div className="col-span-2">Owner</div>
-                <div className="col-span-2">Size</div>
-                <div className="col-span-2">Shared At</div>
-                <div className="col-span-1">Actions</div>
-              </div>
+            </button>
+          </div>
+        )}
 
-              {/* File Items */}
-              {sharedFiles.map((file) => (
+        {/* File List */}
+        <div className="glass p-6 rounded-2xl shadow-2xl">
+          <div className="mb-6 flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+              <svg
+                className="w-6 h-6 text-indigo-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                />
+              </svg>
+              {isFetching ? "Loading..." : `${sharedFiles.length} Files`}
+            </h2>
+          </div>
+
+          <div className="space-y-3">
+            {isFetching ? (
+              <>
+                <FileItemSkeleton />
+                <FileItemSkeleton />
+                <FileItemSkeleton />
+              </>
+            ) : sharedFiles.length === 0 ? (
+              <div className="text-center py-16 animate-fade-in">
+                <div className="w-20 h-20 bg-gray-700/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg
+                    className="w-10 h-10 text-gray-500"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                    />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-medium text-gray-300 mb-2">
+                  No Shared Files
+                </h3>
+                <p className="text-gray-500">
+                  Files shared with you will appear here
+                </p>
+              </div>
+            ) : (
+              sharedFiles.map((file, index) => (
                 <div
                   key={file.id}
-                  className="grid grid-cols-12 gap-4 items-center p-4 glass-light rounded-xl hover:bg-gray-700/30 transition-colors duration-200"
+                  className="glass p-4 rounded-xl hover:bg-white/5 transition-all animate-slide-up border border-white/5"
+                  style={{ animationDelay: `${index * 0.05}s` }}
                 >
-                  {/* File Name with Icon */}
-                  <div className="col-span-5 flex items-center gap-3">
-                    <svg
-                      className="w-8 h-8 text-blue-400 shrink-0"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                      />
-                    </svg>
-                    <div className="truncate">
-                      <p className="font-medium text-white truncate">
-                        {file.filename}
-                      </p>
+                  <div className="flex items-center justify-between gap-4">
+                    {/* File Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-indigo-600/20 rounded-lg">
+                          <svg
+                            className="w-5 h-5 text-indigo-400"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                            />
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-white font-medium truncate">
+                            {file.filename}
+                          </h3>
+                          <div className="flex items-center gap-3 text-sm text-gray-400 mt-1">
+                            <span className="flex items-center gap-1">
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                                />
+                              </svg>
+                              {file.owner_username}
+                            </span>
+                            <span>•</span>
+                            <span>{formatBytes(file.file_size)}</span>
+                            <span>•</span>
+                            <span>{formatDate(file.shared_at)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2">
+                      {loadingFileId === file.file_id ? (
+                        <div className="flex items-center gap-2 px-4 py-2 text-sm text-gray-400">
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-indigo-500 border-t-transparent"></div>
+                          <span>Downloading...</span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => downloadSharedFile(file)}
+                          className="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-all flex items-center gap-2 cursor-pointer"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                            />
+                          </svg>
+                          Download
+                        </button>
+                      )}
                     </div>
                   </div>
-
-                  {/* Owner */}
-                  <div className="col-span-2">
-                    <span className="text-sm text-gray-400">
-                      @{file.owner_username}
-                    </span>
-                  </div>
-
-                  {/* Size */}
-                  <div className="col-span-2">
-                    <span className="text-sm text-gray-400">
-                      {formatBytes(file.file_size)}
-                    </span>
-                  </div>
-
-                  {/* Shared At */}
-                  <div className="col-span-2">
-                    <span className="text-sm text-gray-400">
-                      {formatDate(file.shared_at)}
-                    </span>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="col-span-1">
-                    <button
-                      onClick={() => handleSharedDownload(file)}
-                      disabled={loadingFileId === file.file_id}
-                      className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Download"
-                    >
-                      {loadingFileId === file.file_id ? (
-                        <svg
-                          className="w-5 h-5 animate-spin"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          />
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          />
-                        </svg>
-                      ) : (
-                        <svg
-                          className="w-5 h-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                          />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Info Box */}
-        <div className="glass-light p-4 rounded-xl border-l-4 border-blue-500">
-          <div className="flex items-start gap-3">
-            <svg
-              className="w-6 h-6 text-blue-400 shrink-0 mt-0.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <div>
-              <h4 className="text-white font-semibold mb-1">
-                About Shared Files
-              </h4>
-              <p className="text-gray-400 text-sm">
-                These files are securely encrypted and can only be decrypted
-                with your private key. The owner has encrypted the file key with
-                your public key, ensuring end-to-end encryption.
-              </p>
-            </div>
+              ))
+            )}
           </div>
         </div>
       </div>

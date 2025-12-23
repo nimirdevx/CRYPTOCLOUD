@@ -116,12 +116,18 @@ async def register(user: UserCreate, users: AsyncIOMotorCollection = Depends(get
 @router.post("/login")
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), users: AsyncIOMotorCollection = Depends(get_user_collection)):
     
-    user_doc = await users.find_one({"username": form_data.username})
+    # Support login with either username or email
+    user_doc = await users.find_one({
+        "$or": [
+            {"username": form_data.username},
+            {"email": form_data.username}  # The username field can contain email
+        ]
+    })
 
     if not user_doc or not verify_password(form_data.password, user_doc["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect username/email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -142,12 +148,18 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), users: AsyncIO
 @router.post("/2fa/login")
 async def login_2fa(request: TwoFaLoginRequest, users: AsyncIOMotorCollection = Depends(get_user_collection)):
     
-    user_doc = await users.find_one({"username": request.username})
+    # Support login with either username or email
+    user_doc = await users.find_one({
+        "$or": [
+            {"username": request.username},
+            {"email": request.username}  # The username field can contain email
+        ]
+    })
 
     if not user_doc or not verify_password(request.password, user_doc["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect username/email or password",
         )
 
     if not user_doc.get("is_2fa_enabled") or not user_doc.get("totp_secret"):

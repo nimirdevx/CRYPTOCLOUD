@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 // 1. IMPORT new crypto function
 import { deriveKey, decryptPrivateKey } from "../lib/crypto";
+import { API_URL } from "../config/constants";
 
 export default function PasswordPrompt() {
   const [password, setPassword] = useState("");
@@ -12,8 +13,6 @@ export default function PasswordPrompt() {
   const [showPassword, setShowPassword] = useState(false);
   // 2. Get 'jwt' and update 'unlock'
   const { unlock, logout, jwt } = useAuth();
-
-  const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

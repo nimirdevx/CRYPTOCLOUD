@@ -1,190 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { useAuth } from "@/app/context/AuthContext";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { useSecurity } from "@/app/hooks";
 import BackupCodesModal from "@/app/components/BackupCodesModal";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
 export default function SecurityPage() {
-  const { jwt, is2FAEnabled, logout, update2FAStatus } = useAuth();
-  const router = useRouter();
-
-  const [qrCode, setQrCode] = useState<string | null>(null);
-  const [totpCode, setTotpCode] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-
-  // --- NEW STATES FOR DELETE MODAL ---
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deletePassword, setDeletePassword] = useState("");
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  // ------------------------------------
-
-  // --- NEW STATES FOR DISABLE 2FA MODAL ---
-  const [showDisable2FAModal, setShowDisable2FAModal] = useState(false);
-  const [disable2FAPassword, setDisable2FAPassword] = useState("");
-  const [disable2FAError, setDisable2FAError] = useState<string | null>(null);
-  // ------------------------------------
-
-  // --- NEW STATES FOR BACKUP CODES ---
-  const [showBackupCodesPasswordModal, setShowBackupCodesPasswordModal] =
-    useState(false);
-  const [backupCodesPassword, setBackupCodesPassword] = useState("");
-  const [backupCodesPasswordError, setBackupCodesPasswordError] = useState<
-    string | null
-  >(null);
-  const [generatedBackupCodes, setGeneratedBackupCodes] = useState<
-    string[] | null
-  >(null);
-  // ------------------------------------
-
-  // Helper for authenticated fetch
-  const authFetch = (url: string, options: RequestInit = {}) => {
-    if (!jwt) throw new Error("Not authenticated");
-    return fetch(url, {
-      ...options,
-      headers: { ...options.headers, Authorization: `Bearer ${jwt}` },
-    });
-  };
-
-  // --- 1. Generate QR Code ---
-  const handleGenerate2FA = async () => {
-    setError(null);
-    setMessage(null);
-    try {
-      const response = await authFetch(`${API_URL}/auth/2fa/generate`, {
-        method: "POST",
-      });
-      if (!response.ok) throw new Error("Failed to generate 2FA secret.");
-
-      const data = await response.json();
-      setQrCode(data.qr_code_data_url); // Save the base64 image data
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
-
-  // --- 2. Verify Code and Enable ---
-  const handleVerify2FA = async () => {
-    setError(null);
-    setMessage(null);
-    try {
-      const response = await authFetch(`${API_URL}/auth/2fa/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ totp_code: totpCode }),
-      });
-
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.detail || "Failed to verify code.");
-
-      setMessage("2FA has been enabled successfully!");
-      setQrCode(null); // Hide QR code
-      setTotpCode(""); // Clear the input
-      update2FAStatus(true); // Update the context instead of reloading
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
-
-  // --- 3. Handle Account Deletion ---
-  const handleDeleteAccount = async () => {
-    if (!deletePassword) {
-      setDeleteError("You must enter your password.");
-      return;
-    }
-    setDeleteError(null);
-
-    try {
-      const response = await authFetch(`${API_URL}/auth/me`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: deletePassword }),
-      });
-
-      if (response.status === 204) {
-        // Success!
-        logout(); // Log the user out from the context
-        router.push("/"); // Redirect to homepage
-      } else {
-        const data = await response.json();
-        throw new Error(data.detail || "Failed to delete account.");
-      }
-    } catch (err: any) {
-      setDeleteError(err.message);
-    }
-  };
-  // ------------------------------------
-
-  // --- 4. Handle Disable 2FA ---
-  const handleDisable2FA = async () => {
-    if (!disable2FAPassword) {
-      setDisable2FAError("You must enter your password.");
-      return;
-    }
-    setDisable2FAError(null);
-
-    try {
-      const response = await authFetch(`${API_URL}/auth/2fa/disable`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: disable2FAPassword }),
-      });
-
-      if (response.status === 204) {
-        // Success!
-        setMessage("2FA has been disabled successfully!");
-        setShowDisable2FAModal(false);
-        setDisable2FAPassword("");
-        update2FAStatus(false); // Update the context
-      } else {
-        const data = await response.json();
-        throw new Error(data.detail || "Failed to disable 2FA.");
-      }
-    } catch (err: any) {
-      setDisable2FAError(err.message);
-    }
-  };
-  // ------------------------------------
-
-  // --- 5. Handle Generate Backup Codes ---
-  const handleGenerateBackupCodes = async () => {
-    if (!backupCodesPassword) {
-      setBackupCodesPasswordError("You must enter your password.");
-      return;
-    }
-    setBackupCodesPasswordError(null);
-
-    try {
-      const response = await authFetch(
-        `${API_URL}/auth/2fa/generate-backup-codes`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ password: backupCodesPassword }),
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        // Close password modal and show codes modal
-        setShowBackupCodesPasswordModal(false);
-        setBackupCodesPassword("");
-        setGeneratedBackupCodes(data); // data is already an array of backup codes
-      } else {
-        const data = await response.json();
-        throw new Error(data.detail || "Failed to generate backup codes.");
-      }
-    } catch (err: any) {
-      setBackupCodesPasswordError(err.message);
-    }
-  };
-  // ------------------------------------
+  const security = useSecurity();
 
   return (
     <>
@@ -271,7 +93,7 @@ export default function SecurityPage() {
                 </div>
               </div>
 
-              {is2FAEnabled && (
+              {security.is2FAEnabled && (
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 border border-green-500/50 rounded-lg">
                   <svg
                     className="w-4 h-4 text-green-400"
@@ -291,7 +113,7 @@ export default function SecurityPage() {
               )}
             </div>
 
-            {is2FAEnabled ? (
+            {security.is2FAEnabled ? (
               <div className="bg-green-500/5 border border-green-500/20 rounded-xl p-6">
                 <div className="flex items-start gap-4">
                   <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center shrink-0">
@@ -322,7 +144,7 @@ export default function SecurityPage() {
                       authenticator app when signing in.
                     </p>
                     <button
-                      onClick={() => setShowDisable2FAModal(true)}
+                      onClick={() => security.setShowDisable2FAModal(true)}
                       className="px-5 py-2.5 font-semibold text-white bg-red-600/80 rounded-lg hover:bg-red-600 transition-all flex items-center gap-2 group"
                     >
                       <svg
@@ -384,9 +206,9 @@ export default function SecurityPage() {
                 </div>
 
                 {/* Step 1: Generate Button */}
-                {!qrCode && (
+                {!security.qrCode && (
                   <button
-                    onClick={handleGenerate2FA}
+                    onClick={security.generate2FA}
                     className="px-6 py-3 font-semibold text-white bg-linear-to-r from-indigo-600 to-purple-600 rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-[1.02] shadow-lg hover:shadow-indigo-500/50 flex items-center gap-2"
                   >
                     <svg
@@ -407,7 +229,7 @@ export default function SecurityPage() {
                 )}
 
                 {/* Step 2: Show QR Code and Verify Input */}
-                {qrCode && (
+                {security.qrCode && (
                   <div className="space-y-6 animate-slide-in">
                     <div className="bg-gray-700/30 p-6 rounded-xl">
                       <div className="flex items-start gap-4 mb-4">
@@ -426,7 +248,7 @@ export default function SecurityPage() {
                       <div className="flex justify-center">
                         <div className="bg-white p-4 rounded-xl inline-block shadow-xl">
                           <Image
-                            src={qrCode}
+                            src={security.qrCode}
                             alt="2FA QR Code"
                             width={220}
                             height={220}
@@ -453,15 +275,17 @@ export default function SecurityPage() {
                         <div className="flex-1">
                           <input
                             type="text"
-                            value={totpCode}
-                            onChange={(e) => setTotpCode(e.target.value)}
+                            value={security.totpCode}
+                            onChange={(e) =>
+                              security.setTotpCode(e.target.value)
+                            }
                             className="w-full p-4 bg-gray-700/50 backdrop-blur-sm rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white text-center text-2xl tracking-widest placeholder-gray-500 transition-all"
                             placeholder="000000"
                             maxLength={6}
                           />
                         </div>
                         <button
-                          onClick={handleVerify2FA}
+                          onClick={security.verify2FA}
                           className="px-6 py-4 font-semibold text-white bg-linear-to-r from-green-600 to-emerald-600 rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all transform hover:scale-[1.02] shadow-lg hover:shadow-green-500/50 flex items-center justify-center gap-2 min-w-[180px]"
                         >
                           <svg
@@ -487,7 +311,7 @@ export default function SecurityPage() {
             )}
 
             {/* Status Messages */}
-            {error && (
+            {security.error && (
               <div className="mt-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg animate-slide-in">
                 <p className="text-red-400 text-sm flex items-center gap-2">
                   <svg
@@ -501,11 +325,11 @@ export default function SecurityPage() {
                       clipRule="evenodd"
                     />
                   </svg>
-                  {error}
+                  {security.error}
                 </p>
               </div>
             )}
-            {message && (
+            {security.message && (
               <div className="mt-4 p-3 bg-green-500/10 border border-green-500/50 rounded-lg animate-slide-in">
                 <p className="text-green-400 text-sm flex items-center gap-2">
                   <svg
@@ -519,14 +343,14 @@ export default function SecurityPage() {
                       clipRule="evenodd"
                     />
                   </svg>
-                  {message}
+                  {security.message}
                 </p>
               </div>
             )}
           </div>
 
           {/* Backup Codes Section - Only show if 2FA is enabled */}
-          {is2FAEnabled && (
+          {security.is2FAEnabled && (
             <div
               className="glass p-8 rounded-2xl shadow-2xl mb-8 animate-slide-up"
               style={{ animationDelay: "0.15s" }}
@@ -589,7 +413,7 @@ export default function SecurityPage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => setShowBackupCodesPasswordModal(true)}
+                  onClick={() => security.setShowBackupCodesPasswordModal(true)}
                   className="px-6 py-3 font-semibold text-white bg-linear-to-r from-purple-600 to-pink-600 rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-[1.02] shadow-lg hover:shadow-purple-500/50 flex items-center gap-2"
                 >
                   <svg
@@ -655,7 +479,7 @@ export default function SecurityPage() {
                 .
               </p>
               <button
-                onClick={() => setShowDeleteModal(true)}
+                onClick={() => security.setShowDeleteModal(true)}
                 className="px-6 py-3 font-semibold text-white bg-red-600/80 rounded-lg hover:bg-red-600 transition-all flex items-center gap-2 group"
               >
                 <svg
@@ -679,7 +503,7 @@ export default function SecurityPage() {
       </div>
 
       {/* Delete Confirmation Modal */}
-      {showDeleteModal && (
+      {security.showDeleteModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="glass p-8 rounded-2xl shadow-2xl max-w-md w-full border-2 border-red-500/30 animate-slide-up">
             <div className="flex items-center gap-4 mb-6">
@@ -735,15 +559,15 @@ export default function SecurityPage() {
                 </div>
                 <input
                   type="password"
-                  value={deletePassword}
-                  onChange={(e) => setDeletePassword(e.target.value)}
+                  value={security.deletePassword}
+                  onChange={(e) => security.setDeletePassword(e.target.value)}
                   className="w-full pl-10 p-3 bg-gray-700/50 backdrop-blur-sm rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent text-white placeholder-gray-400 transition-all"
                   placeholder="Enter your password"
                 />
               </div>
             </div>
 
-            {deleteError && (
+            {security.deleteError && (
               <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg animate-slide-in">
                 <p className="text-red-400 text-sm flex items-center gap-2">
                   <svg
@@ -757,7 +581,7 @@ export default function SecurityPage() {
                       clipRule="evenodd"
                     />
                   </svg>
-                  {deleteError}
+                  {security.deleteError}
                 </p>
               </div>
             )}
@@ -765,16 +589,14 @@ export default function SecurityPage() {
             <div className="flex gap-3">
               <button
                 onClick={() => {
-                  setShowDeleteModal(false);
-                  setDeletePassword("");
-                  setDeleteError(null);
+                  security.setShowDeleteModal(false);
                 }}
                 className="flex-1 px-6 py-3 font-semibold text-gray-300 glass-light rounded-lg hover:bg-gray-600/50 transition-all"
               >
                 Cancel
               </button>
               <button
-                onClick={handleDeleteAccount}
+                onClick={security.deleteAccount}
                 className="flex-1 px-6 py-3 font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-all flex items-center justify-center gap-2"
               >
                 <svg
@@ -798,7 +620,7 @@ export default function SecurityPage() {
       )}
 
       {/* Disable 2FA Confirmation Modal */}
-      {showDisable2FAModal && (
+      {security.showDisable2FAModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="glass p-8 rounded-2xl shadow-2xl max-w-md w-full border-2 border-yellow-500/30 animate-slide-up">
             <div className="flex items-center gap-4 mb-6">
@@ -854,15 +676,17 @@ export default function SecurityPage() {
                 </div>
                 <input
                   type="password"
-                  value={disable2FAPassword}
-                  onChange={(e) => setDisable2FAPassword(e.target.value)}
+                  value={security.disable2FAPassword}
+                  onChange={(e) =>
+                    security.setDisable2FAPassword(e.target.value)
+                  }
                   className="w-full pl-10 p-3 bg-gray-700/50 backdrop-blur-sm rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent text-white placeholder-gray-400 transition-all"
                   placeholder="Enter your password"
                 />
               </div>
             </div>
 
-            {disable2FAError && (
+            {security.disable2FAError && (
               <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg animate-slide-in">
                 <p className="text-red-400 text-sm flex items-center gap-2">
                   <svg
@@ -876,7 +700,7 @@ export default function SecurityPage() {
                       clipRule="evenodd"
                     />
                   </svg>
-                  {disable2FAError}
+                  {security.disable2FAError}
                 </p>
               </div>
             )}
@@ -884,16 +708,14 @@ export default function SecurityPage() {
             <div className="flex gap-3">
               <button
                 onClick={() => {
-                  setShowDisable2FAModal(false);
-                  setDisable2FAPassword("");
-                  setDisable2FAError(null);
+                  security.setShowDisable2FAModal(false);
                 }}
                 className="flex-1 px-6 py-3 font-semibold text-gray-300 glass-light rounded-lg hover:bg-gray-600/50 transition-all"
               >
                 Cancel
               </button>
               <button
-                onClick={handleDisable2FA}
+                onClick={security.disable2FA}
                 className="flex-1 px-6 py-3 font-semibold text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 transition-all flex items-center justify-center gap-2"
               >
                 <svg
@@ -917,7 +739,7 @@ export default function SecurityPage() {
       )}
 
       {/* Backup Codes Password Confirmation Modal */}
-      {showBackupCodesPasswordModal && (
+      {security.showBackupCodesPasswordModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="glass p-8 rounded-2xl shadow-2xl max-w-md w-full border-2 border-purple-500/30 animate-slide-up">
             <div className="flex items-center gap-4 mb-6">
@@ -971,15 +793,17 @@ export default function SecurityPage() {
                 </div>
                 <input
                   type="password"
-                  value={backupCodesPassword}
-                  onChange={(e) => setBackupCodesPassword(e.target.value)}
+                  value={security.backupCodesPassword}
+                  onChange={(e) =>
+                    security.setBackupCodesPassword(e.target.value)
+                  }
                   className="w-full pl-10 p-3 bg-gray-700/50 backdrop-blur-sm rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-gray-400 transition-all"
                   placeholder="Enter your password"
                 />
               </div>
             </div>
 
-            {backupCodesPasswordError && (
+            {security.backupCodesPasswordError && (
               <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg animate-slide-in">
                 <p className="text-red-400 text-sm flex items-center gap-2">
                   <svg
@@ -993,7 +817,7 @@ export default function SecurityPage() {
                       clipRule="evenodd"
                     />
                   </svg>
-                  {backupCodesPasswordError}
+                  {security.backupCodesPasswordError}
                 </p>
               </div>
             )}
@@ -1001,16 +825,14 @@ export default function SecurityPage() {
             <div className="flex gap-3">
               <button
                 onClick={() => {
-                  setShowBackupCodesPasswordModal(false);
-                  setBackupCodesPassword("");
-                  setBackupCodesPasswordError(null);
+                  security.setShowBackupCodesPasswordModal(false);
                 }}
                 className="flex-1 px-6 py-3 font-semibold text-gray-300 glass-light rounded-lg hover:bg-gray-600/50 transition-all"
               >
                 Cancel
               </button>
               <button
-                onClick={handleGenerateBackupCodes}
+                onClick={security.generateBackupCodes}
                 className="flex-1 px-6 py-3 font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-all flex items-center justify-center gap-2"
               >
                 <svg
@@ -1034,10 +856,10 @@ export default function SecurityPage() {
       )}
 
       {/* Backup Codes Display Modal */}
-      {generatedBackupCodes && (
+      {security.generatedBackupCodes && (
         <BackupCodesModal
-          codes={generatedBackupCodes}
-          onClose={() => setGeneratedBackupCodes(null)}
+          codes={security.generatedBackupCodes}
+          onClose={() => security.setGeneratedBackupCodes(null)}
         />
       )}
     </>
