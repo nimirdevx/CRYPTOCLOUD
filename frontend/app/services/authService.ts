@@ -10,6 +10,7 @@ import {
   TwoFactorStatusResponse,
 } from "@/app/types";
 import { API_URL } from "@/app/config/constants";
+import { handleApiError, checkTokenValidity } from "@/app/lib/apiError";
 
 /**
  * Auth Service Class
@@ -109,6 +110,11 @@ export class AuthService {
    * Setup 2FA for user
    */
   async setup2FA(jwt: string): Promise<TwoFactorSetupResponse> {
+    // Proactively check token validity
+    if (!checkTokenValidity()) {
+      throw new Error("Token expired - user logged out");
+    }
+
     const response = await fetch(`${API_URL}/auth/2fa/setup`, {
       method: "POST",
       headers: {
@@ -118,8 +124,7 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.detail || "2FA setup failed");
+      await handleApiError(response);
     }
 
     return response.json();
@@ -129,6 +134,11 @@ export class AuthService {
    * Enable 2FA after setup
    */
   async enable2FA(jwt: string, totpCode: string): Promise<void> {
+    // Proactively check token validity
+    if (!checkTokenValidity()) {
+      throw new Error("Token expired - user logged out");
+    }
+
     const response = await fetch(`${API_URL}/auth/2fa/enable`, {
       method: "POST",
       headers: {
@@ -139,8 +149,7 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.detail || "Failed to enable 2FA");
+      await handleApiError(response);
     }
   }
 
@@ -148,6 +157,11 @@ export class AuthService {
    * Generate 2FA QR code
    */
   async generate2FA(jwt: string): Promise<{ qr_code_data_url: string }> {
+    // Proactively check token validity
+    if (!checkTokenValidity()) {
+      throw new Error("Token expired - user logged out");
+    }
+
     const response = await fetch(`${API_URL}/auth/2fa/generate`, {
       method: "POST",
       headers: {
@@ -156,8 +170,7 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.detail || "Failed to generate 2FA secret");
+      await handleApiError(response);
     }
 
     return response.json();
@@ -167,6 +180,11 @@ export class AuthService {
    * Verify 2FA code and enable 2FA
    */
   async verify2FA(jwt: string, totpCode: string): Promise<void> {
+    // Proactively check token validity
+    if (!checkTokenValidity()) {
+      throw new Error("Token expired - user logged out");
+    }
+
     const response = await fetch(`${API_URL}/auth/2fa/verify`, {
       method: "POST",
       headers: {
@@ -177,8 +195,7 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.detail || "Failed to verify code");
+      await handleApiError(response);
     }
   }
 
@@ -186,6 +203,11 @@ export class AuthService {
    * Disable 2FA (requires password, not TOTP code)
    */
   async disable2FA(jwt: string, password: string): Promise<void> {
+    // Proactively check token validity
+    if (!checkTokenValidity()) {
+      throw new Error("Token expired - user logged out");
+    }
+
     const response = await fetch(`${API_URL}/auth/2fa/disable`, {
       method: "POST",
       headers: {
@@ -196,8 +218,7 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.detail || "Failed to disable 2FA");
+      await handleApiError(response);
     }
   }
 
@@ -205,6 +226,11 @@ export class AuthService {
    * Generate backup codes (requires password)
    */
   async generateBackupCodes(jwt: string, password: string): Promise<string[]> {
+    // Proactively check token validity
+    if (!checkTokenValidity()) {
+      throw new Error("Token expired - user logged out");
+    }
+
     const response = await fetch(`${API_URL}/auth/2fa/generate-backup-codes`, {
       method: "POST",
       headers: {
@@ -215,8 +241,7 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.detail || "Failed to generate backup codes");
+      await handleApiError(response);
     }
 
     return response.json();
@@ -226,6 +251,11 @@ export class AuthService {
    * Get 2FA status
    */
   async get2FAStatus(jwt: string): Promise<TwoFactorStatusResponse> {
+    // Proactively check token validity
+    if (!checkTokenValidity()) {
+      throw new Error("Token expired - user logged out");
+    }
+
     const response = await fetch(`${API_URL}/auth/2fa/status`, {
       method: "GET",
       headers: {
@@ -234,8 +264,7 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.detail || "Failed to get 2FA status");
+      await handleApiError(response);
     }
 
     return response.json();
@@ -265,6 +294,52 @@ export class AuthService {
     }
 
     return response.json();
+  }
+
+  /**
+   * Get current user details
+   */
+  async getCurrentUser(jwt: string): Promise<any> {
+    // Proactively check token validity
+    if (!checkTokenValidity()) {
+      throw new Error("Token expired - user logged out");
+    }
+
+    const response = await fetch(`${API_URL}/auth/me`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+      },
+    });
+
+    if (!response.ok) {
+      await handleApiError(response);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Update username
+   */
+  async updateUsername(jwt: string, newUsername: string): Promise<void> {
+    // Proactively check token validity
+    if (!checkTokenValidity()) {
+      throw new Error("Token expired - user logged out");
+    }
+
+    const response = await fetch(`${API_URL}/auth/me/username`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ new_username: newUsername }),
+    });
+
+    if (!response.ok) {
+      await handleApiError(response);
+    }
   }
 }
 

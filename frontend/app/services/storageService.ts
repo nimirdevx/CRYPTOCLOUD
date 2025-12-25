@@ -8,21 +8,37 @@ import {
   StorageUsage,
   UploadUrlResponse,
   DownloadUrlResponse,
+  PaginatedFileResponse,
 } from "@/app/types";
 import { API_URL } from "@/app/config/constants";
+import { handleApiError, checkTokenValidity } from "@/app/lib/apiError";
 
 /**
  * Helper function to create authenticated fetch requests
+ * Automatically handles 401 errors by logging out the user
+ * Proactively checks token validity before making requests
  */
 export const createAuthFetch = (jwt: string) => {
-  return (url: string, options: RequestInit = {}) => {
-    return fetch(url, {
+  return async (url: string, options: RequestInit = {}) => {
+    // Proactively check if token is expired before making the request
+    if (!checkTokenValidity()) {
+      throw new Error("Token expired - user logged out");
+    }
+
+    const response = await fetch(url, {
       ...options,
       headers: {
         ...options.headers,
         Authorization: `Bearer ${jwt}`,
       },
     });
+
+    // Check for errors and handle 401 automatically
+    if (!response.ok) {
+      await handleApiError(response);
+    }
+
+    return response;
   };
 };
 
@@ -42,19 +58,45 @@ export class StorageService {
   /**
    * Fetch files in a folder
    */
-  async getFiles(parentId: string | null = null): Promise<FileMetadata[]> {
+  async getFiles(
+    parentId: string | null = null,
+    page: number = 1,
+    pageSize: number = 50
+  ): Promise<PaginatedFileResponse> {
     const query = new URLSearchParams();
     if (parentId) {
       query.append("parentId", parentId);
     }
+    query.append("page", page.toString());
+    query.append("page_size", pageSize.toString());
 
     const response = await this.authFetch(
       `${API_URL}/files/?${query.toString()}`
     );
 
-    if (!response.ok) {
-      throw new Error("Failed to fetch files");
+    return response.json();
+  }
+
+  /**
+   * Search for files and folders recursively
+   */
+  async searchFiles(
+    query: string,
+    parentId: string | null = null,
+    page: number = 1,
+    pageSize: number = 50
+  ): Promise<PaginatedFileResponse> {
+    const params = new URLSearchParams();
+    params.append("query", query);
+    if (parentId) {
+      params.append("parentId", parentId);
     }
+    params.append("page", page.toString());
+    params.append("page_size", pageSize.toString());
+
+    const response = await this.authFetch(
+      `${API_URL}/files/search?${params.toString()}`
+    );
 
     return response.json();
   }
@@ -65,10 +107,6 @@ export class StorageService {
   async getStorageUsage(): Promise<StorageUsage> {
     const response = await this.authFetch(`${API_URL}/files/users/me/storage`);
 
-    if (!response.ok) {
-      throw new Error("Failed to fetch storage usage");
-    }
-
     return response.json();
   }
 
@@ -77,6 +115,7 @@ export class StorageService {
    */
   async requestUploadUrl(
     filename: string,
+    fileSize: number,
     contentType: string = "application/octet-stream"
   ): Promise<UploadUrlResponse> {
     const response = await this.authFetch(
@@ -87,13 +126,10 @@ export class StorageService {
         body: JSON.stringify({
           filename,
           content_type: contentType,
+          file_size: fileSize,
         }),
       }
     );
-
-    if (!response.ok) {
-      throw new Error("Could not get upload URL");
-    }
 
     return response.json();
   }
@@ -120,10 +156,6 @@ export class StorageService {
       }),
     });
 
-    if (!response.ok) {
-      throw new Error("Failed to finalize upload");
-    }
-
     return response.json();
   }
 
@@ -135,10 +167,6 @@ export class StorageService {
       `${API_URL}/files/download-url/${fileId}`
     );
 
-    if (!response.ok) {
-      throw new Error("Could not get download URL");
-    }
-
     return response.json();
   }
 
@@ -146,14 +174,9 @@ export class StorageService {
    * Delete a file or folder
    */
   async deleteFile(fileId: string): Promise<void> {
-    const response = await this.authFetch(`${API_URL}/files/${fileId}`, {
+    await this.authFetch(`${API_URL}/files/${fileId}`, {
       method: "DELETE",
     });
-
-    if (response.status !== 204) {
-      const data = await response.json();
-      throw new Error(data.detail || "Failed to delete file");
-    }
   }
 
   /**
@@ -166,10 +189,21 @@ export class StorageService {
       body: JSON.stringify({ new_filename: newFilename }),
     });
 
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.detail || "Failed to rename file");
-    }
+    return response.json();
+  }
+
+  /**
+   * Move a file or folder to a new parent folder
+   */
+  async moveFile(
+    fileId: string,
+    newParentId: string | null
+  ): Promise<FileMetadata> {
+    const response = await this.authFetch(`${API_URL}/files/${fileId}/move`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ new_parent_id: newParentId }),
+    });
 
     return response.json();
   }
@@ -186,11 +220,6 @@ export class StorageService {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, parentId }),
     });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.detail || "Failed to create folder");
-    }
 
     return response.json();
   }

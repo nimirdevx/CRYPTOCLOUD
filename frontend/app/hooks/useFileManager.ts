@@ -32,8 +32,16 @@ export interface UseFileManagerResult {
   loadingFileId: string | null;
   loadingMessage: string | null;
 
+  // Pagination
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  pageSize: number;
+
   // Actions
-  fetchFiles: () => Promise<void>;
+  fetchFiles: (page?: number) => Promise<void>;
+  searchFiles: (query: string, page?: number) => Promise<void>;
+  goToPage: (page: number) => void;
   uploadFile: (file: File) => Promise<void>;
   downloadFile: (file: FileMetadata) => Promise<void>;
   previewFile: (file: FileMetadata) => Promise<{
@@ -42,8 +50,10 @@ export interface UseFileManagerResult {
   }>;
   deleteFile: (fileId: string) => Promise<void>;
   renameFile: (fileId: string, newFilename: string) => Promise<void>;
+  moveFile: (fileId: string, newParentId: string | null) => Promise<void>;
   createFolder: (name: string) => Promise<void>;
   navigateToFolder: (folder: FileMetadata) => void;
+  navigateToFolderById: (folderId: string | null, folderName: string) => void;
   navigateToBreadcrumb: (index: number) => void;
   setError: (error: string | null) => void;
   setMessage: (message: string | null) => void;
@@ -63,33 +73,82 @@ export const useFileManager = (): UseFileManagerResult => {
   const [error, setError] = useState<string | null>(null);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [folderPath, setFolderPath] = useState<Breadcrumb[]>([
-    { id: null, name: "Home" },
+    { id: null, name: "My Files" },
   ]);
   const [loadingFileId, setLoadingFileId] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [pageSize] = useState(50);
+
   // Fetch files and storage usage
-  const fetchFiles = useCallback(async () => {
-    if (!jwt) return;
+  const fetchFiles = useCallback(
+    async (page: number = 1) => {
+      if (!jwt) return;
 
-    setIsFetchingFiles(true);
-    setError(null);
+      setIsFetchingFiles(true);
+      setError(null);
 
-    try {
-      const service = createStorageService(jwt);
-      const [filesData, storageData] = await Promise.all([
-        service.getFiles(currentFolderId),
-        service.getStorageUsage(),
-      ]);
+      try {
+        const service = createStorageService(jwt);
+        const [filesData, storageData] = await Promise.all([
+          service.getFiles(currentFolderId, page, pageSize),
+          service.getStorageUsage(),
+        ]);
 
-      setFiles(filesData);
-      setStorageUsage(storageData);
-    } catch (err: any) {
-      setError(err.message || "Failed to fetch data");
-    } finally {
-      setIsFetchingFiles(false);
-    }
-  }, [jwt, currentFolderId]);
+        setFiles(filesData.items);
+        setStorageUsage(storageData);
+        setCurrentPage(filesData.page);
+        setTotalPages(filesData.total_pages);
+        setTotalItems(filesData.total);
+      } catch (err: any) {
+        setError(err.message || "Failed to fetch data");
+      } finally {
+        setIsFetchingFiles(false);
+      }
+    },
+    [jwt, currentFolderId, pageSize]
+  );
+
+  // Search files recursively
+  const searchFiles = useCallback(
+    async (query: string, page: number = 1) => {
+      if (!jwt) return;
+
+      // If query is empty, just fetch regular files
+      if (!query || query.trim() === "") {
+        await fetchFiles(page);
+        return;
+      }
+
+      setIsFetchingFiles(true);
+      setError(null);
+
+      try {
+        const service = createStorageService(jwt);
+        const searchResults = await service.searchFiles(
+          query,
+          currentFolderId,
+          page,
+          pageSize
+        );
+
+        setFiles(searchResults.items);
+        setCurrentPage(searchResults.page);
+        setTotalPages(searchResults.total_pages);
+        setTotalItems(searchResults.total);
+      } catch (err: any) {
+        setError(err.message || "Failed to search files");
+      } finally {
+        setIsFetchingFiles(false);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [jwt, currentFolderId, pageSize] // Removed fetchFiles to prevent circular dependency
+  );
 
   // Upload file
   const uploadFile = useCallback(
@@ -127,10 +186,11 @@ export const useFileManager = (): UseFileManagerResult => {
         );
         setUploadProgress(30);
 
-        // Request upload URL
+        // Request upload URL (with file size for quota check)
         setMessage("Requesting upload location...");
         const { upload_url, s3_key } = await service.requestUploadUrl(
-          file.name
+          file.name,
+          file.size
         );
         setUploadProgress(40);
 
@@ -334,6 +394,31 @@ export const useFileManager = (): UseFileManagerResult => {
     [jwt]
   );
 
+  // Move file
+  const moveFile = useCallback(
+    async (fileId: string, newParentId: string | null) => {
+      if (!jwt) return;
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const service = createStorageService(jwt);
+        await service.moveFile(fileId, newParentId);
+
+        // Remove the file from the current view
+        setFiles((prevFiles) => prevFiles.filter((f) => f.id !== fileId));
+
+        setMessage("File moved successfully");
+      } catch (err: any) {
+        setError(err.message || "Move failed");
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [jwt]
+  );
+
   // Create folder
   const createFolder = useCallback(
     async (name: string) => {
@@ -365,6 +450,24 @@ export const useFileManager = (): UseFileManagerResult => {
     ]);
   }, []);
 
+  // Navigate to folder by ID and name (direct navigation, replaces path)
+  const navigateToFolderById = useCallback(
+    (folderId: string | null, folderName: string) => {
+      setCurrentFolderId(folderId);
+      if (folderId === null) {
+        // Navigate to root
+        setFolderPath([{ id: null, name: "My Files" }]);
+      } else {
+        // Navigate directly to this folder (assuming it's at root level)
+        setFolderPath([
+          { id: null, name: "My Files" },
+          { id: folderId, name: folderName },
+        ]);
+      }
+    },
+    []
+  );
+
   // Navigate via breadcrumb
   const navigateToBreadcrumb = useCallback((index: number) => {
     setFolderPath((prev) => {
@@ -374,10 +477,21 @@ export const useFileManager = (): UseFileManagerResult => {
     });
   }, []);
 
+  // Go to specific page
+  const goToPage = useCallback(
+    (page: number) => {
+      if (page >= 1 && page <= totalPages) {
+        fetchFiles(page);
+      }
+    },
+    [totalPages, fetchFiles]
+  );
+
   // Fetch files on mount and when folder changes
   useEffect(() => {
     fetchFiles();
-  }, [fetchFiles]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentFolderId, jwt]); // Only refetch when folder or auth changes, not when fetchFiles recreates
 
   return {
     // State
@@ -394,15 +508,25 @@ export const useFileManager = (): UseFileManagerResult => {
     loadingFileId,
     loadingMessage,
 
+    // Pagination
+    currentPage,
+    totalPages,
+    totalItems,
+    pageSize,
+
     // Actions
     fetchFiles,
+    searchFiles,
+    goToPage,
     uploadFile,
     downloadFile,
     previewFile,
     deleteFile,
     renameFile,
+    moveFile,
     createFolder,
     navigateToFolder,
+    navigateToFolderById,
     navigateToBreadcrumb,
     setError,
     setMessage,

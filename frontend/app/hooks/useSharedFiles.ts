@@ -15,7 +15,11 @@ export interface UseSharedFilesResult {
   isFetching: boolean;
   error: string | null;
   loadingFileId: string | null;
-  fetchSharedFiles: () => Promise<void>;
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  fetchSharedFiles: (page?: number) => Promise<void>;
+  goToPage: (page: number) => void;
   downloadSharedFile: (file: SharedFileResponse) => Promise<void>;
   setError: (error: string | null) => void;
 }
@@ -27,24 +31,34 @@ export const useSharedFiles = (): UseSharedFilesResult => {
   const [isFetching, setIsFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loadingFileId, setLoadingFileId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const pageSize = 50;
 
   // Fetch shared files
-  const fetchSharedFiles = useCallback(async () => {
-    if (!jwt) return;
+  const fetchSharedFiles = useCallback(
+    async (page: number = 1) => {
+      if (!jwt) return;
 
-    setIsFetching(true);
-    setError(null);
+      setIsFetching(true);
+      setError(null);
 
-    try {
-      const service = createShareService(jwt);
-      const data = await service.getSharedWithMe();
-      setSharedFiles(data);
-    } catch (err: any) {
-      setError(err.message || "Failed to fetch shared files");
-    } finally {
-      setIsFetching(false);
-    }
-  }, [jwt]);
+      try {
+        const service = createShareService(jwt);
+        const data = await service.getSharedWithMe(page, pageSize);
+        setSharedFiles(data.items);
+        setCurrentPage(data.page);
+        setTotalPages(data.total_pages);
+        setTotalItems(data.total);
+      } catch (err: any) {
+        setError(err.message || "Failed to fetch shared files");
+      } finally {
+        setIsFetching(false);
+      }
+    },
+    [jwt]
+  );
 
   // Download shared file
   const downloadSharedFile = useCallback(
@@ -93,6 +107,16 @@ export const useSharedFiles = (): UseSharedFilesResult => {
     [jwt, privateKey]
   );
 
+  // Go to specific page
+  const goToPage = useCallback(
+    (page: number) => {
+      if (page >= 1 && page <= totalPages) {
+        fetchSharedFiles(page);
+      }
+    },
+    [totalPages, fetchSharedFiles]
+  );
+
   // Fetch on mount
   useEffect(() => {
     fetchSharedFiles();
@@ -103,7 +127,11 @@ export const useSharedFiles = (): UseSharedFilesResult => {
     isFetching,
     error,
     loadingFileId,
+    currentPage,
+    totalPages,
+    totalItems,
     fetchSharedFiles,
+    goToPage,
     downloadSharedFile,
     setError,
   };

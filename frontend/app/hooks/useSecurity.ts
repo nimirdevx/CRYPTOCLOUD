@@ -2,7 +2,9 @@ import { useState, useCallback } from "react";
 import { useAuth } from "@/app/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { authService } from "@/app/services";
+import { profileService } from "@/app/services/profileService";
 import { API_URL } from "@/app/config/constants";
+import type { User } from "@/app/types";
 
 interface SecurityState {
   // 2FA QR Code
@@ -28,6 +30,15 @@ interface SecurityState {
   backupCodesPassword: string;
   backupCodesPasswordError: string | null;
   generatedBackupCodes: string[] | null;
+
+  // User data
+  currentUser: User | null;
+  newUsername: string;
+  updateUsernameError: string | null;
+
+  // Profile picture upload
+  isUploadingProfilePicture: boolean;
+  profilePictureError: string | null;
 }
 
 export const useSecurity = () => {
@@ -50,6 +61,11 @@ export const useSecurity = () => {
     backupCodesPassword: "",
     backupCodesPasswordError: null,
     generatedBackupCodes: null,
+    currentUser: null,
+    newUsername: "",
+    updateUsernameError: null,
+    isUploadingProfilePicture: false,
+    profilePictureError: null,
   });
 
   // Helper to update state
@@ -59,8 +75,56 @@ export const useSecurity = () => {
 
   // Clear messages
   const clearMessages = useCallback(() => {
-    updateState({ error: null, message: null });
+    updateState({ error: null, message: null, updateUsernameError: null });
   }, [updateState]);
+
+  // ============ User Data Operations ============
+
+  /**
+   * Get current user
+   */
+  const getCurrentUser = useCallback(async () => {
+    if (!jwt) {
+      updateState({ error: "Not authenticated" });
+      return;
+    }
+
+    clearMessages();
+    try {
+      const user = await authService.getCurrentUser(jwt);
+      updateState({ currentUser: user, newUsername: user.username });
+    } catch (err: any) {
+      updateState({ error: err.message || "Failed to fetch user data" });
+    }
+  }, [jwt, updateState, clearMessages]);
+
+  /**
+   * Update username
+   */
+  const updateUsername = useCallback(async () => {
+    if (!jwt) {
+      updateState({ updateUsernameError: "Not authenticated" });
+      return;
+    }
+
+    if (!state.newUsername) {
+      updateState({ updateUsernameError: "Username cannot be empty." });
+      return;
+    }
+
+    updateState({ updateUsernameError: null });
+    try {
+      await authService.updateUsername(jwt, state.newUsername);
+      updateState({
+        message: "Username updated successfully!",
+      });
+      getCurrentUser(); // Refresh user data
+    } catch (err: any) {
+      updateState({
+        updateUsernameError: err.message || "Failed to update username",
+      });
+    }
+  }, [jwt, state.newUsername, updateState, getCurrentUser]);
 
   // ============ 2FA Operations ============
 
@@ -109,6 +173,17 @@ export const useSecurity = () => {
       updateState({ error: err.message || "Failed to verify code" });
     }
   }, [jwt, state.totpCode, updateState, clearMessages, update2FAStatus]);
+
+  /**
+   * Cancel 2FA setup
+   */
+  const cancel2FASetup = useCallback(() => {
+    updateState({
+      qrCode: null,
+      totpCode: "",
+      error: null,
+    });
+  }, [updateState]);
 
   /**
    * Disable 2FA
@@ -284,14 +359,129 @@ export const useSecurity = () => {
     [updateState]
   );
 
+  const setNewUsername = useCallback(
+    (username: string) => {
+      updateState({ newUsername: username });
+    },
+    [updateState]
+  );
+
+  // ============ Profile Picture Operations ============
+
+  /**
+   * Upload profile picture
+   */
+  const uploadProfilePicture = useCallback(
+    async (file: File) => {
+      if (!jwt) {
+        updateState({ profilePictureError: "Not authenticated" });
+        return;
+      }
+
+      // Validate file type
+      const allowedTypes = [
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+      ];
+      if (!allowedTypes.includes(file.type)) {
+        updateState({
+          profilePictureError:
+            "Invalid file type. Please upload a JPEG, PNG, GIF, or WebP image.",
+        });
+        return;
+      }
+
+      // Validate file size (max 5MB)
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (file.size > maxSize) {
+        updateState({
+          profilePictureError: "File too large. Maximum size is 5MB.",
+        });
+        return;
+      }
+
+      updateState({
+        isUploadingProfilePicture: true,
+        profilePictureError: null,
+      });
+
+      try {
+        const updatedUser = await profileService.uploadProfilePicture(
+          file,
+          jwt
+        );
+        updateState({
+          isUploadingProfilePicture: false,
+          currentUser: updatedUser,
+          message: "Profile picture updated successfully!",
+        });
+
+        // Dispatch event to notify other components
+        window.dispatchEvent(new CustomEvent("profilePictureUpdated"));
+      } catch (err: any) {
+        updateState({
+          isUploadingProfilePicture: false,
+          profilePictureError:
+            err.message || "Failed to upload profile picture",
+        });
+      }
+    },
+    [jwt, updateState]
+  );
+
+  /**
+   * Delete profile picture
+   */
+  const deleteProfilePicture = useCallback(async () => {
+    if (!jwt) {
+      updateState({ profilePictureError: "Not authenticated" });
+      return;
+    }
+
+    updateState({
+      isUploadingProfilePicture: true,
+      profilePictureError: null,
+    });
+
+    try {
+      const updatedUser = await profileService.deleteProfilePicture(jwt);
+      updateState({
+        isUploadingProfilePicture: false,
+        currentUser: updatedUser,
+        message: "Profile picture deleted successfully!",
+      });
+
+      // Dispatch event to notify other components
+      window.dispatchEvent(new CustomEvent("profilePictureUpdated"));
+    } catch (err: any) {
+      updateState({
+        isUploadingProfilePicture: false,
+        profilePictureError: err.message || "Failed to delete profile picture",
+      });
+    }
+  }, [jwt, updateState]);
+
   return {
     // State
     ...state,
     is2FAEnabled,
 
+    // User Data
+    getCurrentUser,
+    updateUsername,
+    setNewUsername,
+
+    // Profile Picture Operations
+    uploadProfilePicture,
+    deleteProfilePicture,
+
     // 2FA Operations
     generate2FA,
     verify2FA,
+    cancel2FASetup,
     disable2FA,
 
     // Backup Codes Operations

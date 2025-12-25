@@ -35,3 +35,9 @@ def get_shared_files_collection():
     if db is not None:
         return db.get_collection("shared_files")
     raise Exception("Database not initialized")
+
+def get_public_shares_collection():
+    """Dependency to get the public_shares collection."""
+    if db is not None:
+        return db.get_collection("public_shares")
+    raise Exception("Database not initialized")

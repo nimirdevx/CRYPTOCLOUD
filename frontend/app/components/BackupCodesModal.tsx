@@ -21,13 +21,13 @@ export default function BackupCodesModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
-      <div className="glass p-8 rounded-2xl shadow-2xl max-w-2xl w-full border-2 border-indigo-500/30 animate-slide-up">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+      <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-2xl w-full animate-scale-up">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
-          <div className="w-14 h-14 bg-indigo-500/20 rounded-xl flex items-center justify-center shrink-0">
+          <div className="w-14 h-14 bg-[#7c5cff]/10 rounded-xl flex items-center justify-center shrink-0">
             <svg
-              className="w-8 h-8 text-indigo-400"
+              className="w-7 h-7 text-[#7c5cff]"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -41,34 +41,38 @@ export default function BackupCodesModal({
             </svg>
           </div>
           <div className="flex-1">
-            <h2 className="text-2xl font-bold text-white">Your Backup Codes</h2>
-            <p className="text-gray-400 text-sm mt-1">
+            <h2 className="text-2xl font-bold text-gray-900">
+              Your Backup Codes
+            </h2>
+            <p className="text-[1rem] text-gray-600 mt-1">
               Save these codes somewhere safe
             </p>
           </div>
         </div>
 
         {/* Warning */}
-        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <svg
-              className="w-6 h-6 text-yellow-400 shrink-0 mt-0.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
-            <div>
-              <h3 className="text-white font-semibold mb-1">
+        <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-5 mb-6">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center shrink-0">
+              <svg
+                className="w-6 h-6 text-amber-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-bold text-gray-900 mb-2">
                 Important: Save these codes now!
               </h3>
-              <p className="text-gray-300 text-sm">
+              <p className="text-[1rem] text-gray-700 leading-relaxed">
                 You will only see these backup codes once. Each code can be used
                 only one time as an alternative to your 6-digit authenticator
                 code. Store them in a safe place.
@@ -78,19 +82,19 @@ export default function BackupCodesModal({
         </div>
 
         {/* Codes Display */}
-        <div className="bg-gray-700/30 rounded-xl p-6 mb-6">
+        <div className="bg-[#7c5cff]/5 rounded-xl p-6 mb-6 border-2 border-[#7c5cff]/20">
           <div className="grid grid-cols-2 gap-3">
             {codes.map((code, index) => (
               <div
                 key={index}
-                className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-3 border border-gray-600 flex items-center gap-3"
+                className="bg-white backdrop-blur-sm rounded-xl p-4 border-2 border-gray-200 hover:border-[#7c5cff]/30 transition-colors flex items-center gap-3 shadow-sm"
               >
-                <div className="w-8 h-8 bg-indigo-500/20 rounded-lg flex items-center justify-center shrink-0">
-                  <span className="text-indigo-400 font-bold text-sm">
+                <div className="w-10 h-10 bg-[#7c5cff]/10 rounded-xl flex items-center justify-center shrink-0">
+                  <span className="text-[#7c5cff] font-bold text-[1rem]">
                     {index + 1}
                   </span>
                 </div>
-                <div className="font-mono text-white text-lg tracking-wider">
+                <div className="font-mono text-gray-900 text-lg font-semibold tracking-wider">
                   {code}
                 </div>
               </div>
@@ -99,10 +103,10 @@ export default function BackupCodesModal({
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3">
+        <div className="flex gap-3 mb-6">
           <button
             onClick={handleCopy}
-            className="flex-1 px-6 py-3 font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 group"
+            className="flex-1 px-6 py-3.5 font-semibold text-white bg-[#7c5cff] rounded-xl hover:bg-[#6b4ce6] transition-all flex items-center justify-center gap-2 group shadow-lg shadow-[#7c5cff]/20"
           >
             {copied ? (
               <>
@@ -142,7 +146,7 @@ export default function BackupCodesModal({
           </button>
           <button
             onClick={onClose}
-            className="flex-1 px-6 py-3 font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-all flex items-center justify-center gap-2"
+            className="flex-1 px-6 py-3.5 font-semibold text-white bg-green-600 rounded-xl hover:bg-green-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-green-600/20"
           >
             <svg
               className="w-5 h-5"
@@ -162,10 +166,10 @@ export default function BackupCodesModal({
         </div>
 
         {/* Additional Info */}
-        <div className="mt-6 bg-gray-700/20 rounded-lg p-4 border border-gray-600/50">
+        <div className="bg-blue-50 rounded-xl p-5 border-2 border-blue-200">
           <div className="flex items-start gap-3">
             <svg
-              className="w-5 h-5 text-gray-400 shrink-0 mt-0.5"
+              className="w-5 h-5 text-blue-600 shrink-0 mt-0.5"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -177,8 +181,8 @@ export default function BackupCodesModal({
                 d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
               />
             </svg>
-            <p className="text-gray-400 text-sm">
-              <strong className="text-gray-300">Pro tip:</strong> Print these
+            <p className="text-[1rem] text-gray-700 leading-relaxed">
+              <strong className="text-gray-900">Pro tip:</strong> Print these
               codes or save them in a password manager. They can help you regain
               access to your account if you lose your authenticator device.
             </p>

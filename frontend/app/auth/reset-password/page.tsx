@@ -10,6 +10,8 @@ import {
   encryptPrivateKey,
 } from "@/app/lib/crypto";
 import { API_URL } from "@/app/config/constants";
+import { PasswordStrengthMeter } from "@/app/components/PasswordStrengthMeter";
+import zxcvbn from "zxcvbn";
 
 function ResetPasswordForm() {
   const [newPassword, setNewPassword] = useState("");
@@ -20,6 +22,9 @@ function ResetPasswordForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [token, setToken] = useState<string | null>(null);
+  const [weakPasswordError, setWeakPasswordError] = useState<string | null>(
+    null
+  );
 
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -47,6 +52,29 @@ function ResetPasswordForm() {
 
     if (newPassword.length < 8) {
       setError("Password must be at least 8 characters long");
+      return;
+    }
+
+    // Use zxcvbn to check password strength
+    const result = zxcvbn(newPassword);
+
+    // Require at least score 2 (Fair) or higher
+    if (result.score < 2) {
+      e.preventDefault();
+
+      // Show error message based on score
+      const errorMessage =
+        result.score === 0
+          ? "Password is too weak. Please use a stronger password."
+          : "Password is weak. Please add more complexity to make it stronger.";
+
+      setWeakPasswordError(errorMessage);
+
+      // Clear error after 3 seconds
+      setTimeout(() => {
+        setWeakPasswordError(null);
+      }, 3000);
+
       return;
     }
 
@@ -249,6 +277,28 @@ function ResetPasswordForm() {
               </div>
             )}
 
+            {/* Weak Password Error Message (temporary) */}
+            {weakPasswordError && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <svg
+                    className="w-5 h-5 text-red-600 shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <p className="text-red-600 text-sm">{weakPasswordError}</p>
+                </div>
+              </div>
+            )}
+
             {/* Form */}
             {!success && token && (
               <form onSubmit={handleSubmit} className="space-y-5">
@@ -330,9 +380,12 @@ function ResetPasswordForm() {
                       )}
                     </button>
                   </div>
-                  <p className="mt-1 text-xs text-gray-500">
-                    Minimum 8 characters
-                  </p>
+
+                  {/* Password Strength Meter */}
+                  <PasswordStrengthMeter
+                    password={newPassword}
+                    showFeedback={true}
+                  />
                 </div>
 
                 {/* Confirm Password Field */}

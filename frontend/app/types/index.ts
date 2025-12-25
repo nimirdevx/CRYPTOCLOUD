@@ -16,11 +16,22 @@ export interface FileMetadata {
   isFolder: boolean;
   parentId: string | null;
   encryptedFileKey: string | null;
+  // Folder statistics
+  calculatedSize?: number; // Total size of folder contents
+  itemCount?: number; // Number of items in folder
 }
 
 export interface Breadcrumb {
   id: string | null;
   name: string;
+}
+
+export interface PaginatedFileResponse {
+  items: FileMetadata[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
 }
 
 // ============================================================================
@@ -59,6 +70,78 @@ export interface MyShareResponse {
   shares: ShareRecipient[];
 }
 
+export interface PaginatedSharedFilesResponse {
+  items: SharedFileResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface PaginatedMySharesResponse {
+  items: MyShareResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+// ============================================================================
+// PUBLIC SHARE TYPES
+// ============================================================================
+
+export interface CreatePublicShareRequest {
+  password?: string;
+  max_downloads?: number;
+  expires_in_hours?: number;
+}
+
+export interface PublicShareResponse {
+  token: string;
+  url_base: string;
+  expires_at: string;
+  password_protected: boolean;
+  max_downloads?: number;
+}
+
+export interface PublicShareMetadata {
+  filename: string;
+  file_size: number;
+  mime_type: string;
+  created_at: string;
+  expires_at: string;
+  download_count: number;
+  max_downloads?: number;
+  password_required: boolean;
+  is_expired: boolean;
+}
+
+export interface PublicShareListItem {
+  id: string;
+  token: string;
+  file_id: string;
+  filename: string;
+  file_size: number;
+  created_at: string;
+  expires_at: string;
+  download_count: number;
+  max_downloads?: number;
+  password_protected: boolean;
+  is_active: boolean;
+  is_expired: boolean;
+}
+
+export interface DownloadPublicFileRequest {
+  password?: string;
+}
+
+export interface PublicFileDownloadResponse {
+  download_url: string;
+  filename: string;
+  file_size: number;
+  mime_type: string;
+}
+
 // ============================================================================
 // USER TYPES
 // ============================================================================
@@ -67,6 +150,7 @@ export interface User {
   id: string;
   username: string;
   email: string;
+  profile_picture_url?: string | null;
 }
 
 // ============================================================================
@@ -111,6 +195,7 @@ export interface LoginResponse {
   publicKey: string;
   is_2fa_enabled: boolean;
   backup_codes?: string[];
+  profile_picture_url?: string | null;
 }
 
 export interface RegisterResponse {
@@ -118,6 +203,7 @@ export interface RegisterResponse {
   username: string;
   publicKey: string;
   backup_codes: string[];
+  profile_picture_url?: string | null;
 }
 
 export interface TwoFactorSetupResponse {

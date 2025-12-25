@@ -3,7 +3,12 @@
  * Handles all file sharing API operations
  */
 
-import { SharedFileResponse, MyShareResponse } from "@/app/types";
+import {
+  SharedFileResponse,
+  MyShareResponse,
+  PaginatedSharedFilesResponse,
+  PaginatedMySharesResponse,
+} from "@/app/types";
 import { createAuthFetch } from "./storageService";
 import { API_URL } from "@/app/config/constants";
 
@@ -23,12 +28,17 @@ export class ShareService {
   /**
    * Get files shared with me
    */
-  async getSharedWithMe(): Promise<SharedFileResponse[]> {
-    const response = await this.authFetch(`${API_URL}/share/shared-with-me`);
+  async getSharedWithMe(
+    page: number = 1,
+    pageSize: number = 50
+  ): Promise<PaginatedSharedFilesResponse> {
+    const params = new URLSearchParams();
+    params.append("page", page.toString());
+    params.append("page_size", pageSize.toString());
 
-    if (!response.ok) {
-      throw new Error("Failed to fetch shared files");
-    }
+    const response = await this.authFetch(
+      `${API_URL}/share/shared-with-me?${params.toString()}`
+    );
 
     return response.json();
   }
@@ -36,12 +46,17 @@ export class ShareService {
   /**
    * Get files shared by me
    */
-  async getSharedByMe(): Promise<MyShareResponse[]> {
-    const response = await this.authFetch(`${API_URL}/share/shared-by-me`);
+  async getSharedByMe(
+    page: number = 1,
+    pageSize: number = 50
+  ): Promise<PaginatedMySharesResponse> {
+    const params = new URLSearchParams();
+    params.append("page", page.toString());
+    params.append("page_size", pageSize.toString());
 
-    if (!response.ok) {
-      throw new Error("Failed to fetch your shared files");
-    }
+    const response = await this.authFetch(
+      `${API_URL}/share/shared-by-me?${params.toString()}`
+    );
 
     return response.json();
   }
@@ -54,35 +69,23 @@ export class ShareService {
     recipientUsername: string,
     encryptedFileKey: string
   ): Promise<void> {
-    const response = await this.authFetch(
-      `${API_URL}/share/files/${fileId}/share`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          recipientUsername,
-          encryptedFileKey,
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.detail || "Failed to share file");
-    }
+    await this.authFetch(`${API_URL}/share/files/${fileId}/share`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recipientUsername,
+        encryptedFileKey,
+      }),
+    });
   }
 
   /**
    * Revoke access to a shared file
    */
   async revokeShare(shareId: string): Promise<void> {
-    const response = await this.authFetch(`${API_URL}/share/${shareId}`, {
+    await this.authFetch(`${API_URL}/share/${shareId}`, {
       method: "DELETE",
     });
-
-    if (response.status !== 204) {
-      throw new Error("Failed to unshare the file");
-    }
   }
 
   /**
@@ -92,11 +95,6 @@ export class ShareService {
     const response = await this.authFetch(
       `${API_URL}/auth/users/${username}/public-key`
     );
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.detail || "Failed to get user public key");
-    }
 
     const data = await response.json();
     return data.public_key;
@@ -115,10 +113,6 @@ export class ShareService {
     const response = await this.authFetch(
       `${API_URL}/share/users/search?username=${username}`
     );
-
-    if (!response.ok) {
-      throw new Error("Failed to search users");
-    }
 
     return response.json();
   }

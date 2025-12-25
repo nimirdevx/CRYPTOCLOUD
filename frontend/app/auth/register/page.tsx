@@ -1,12 +1,52 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useRegistration } from "@/app/hooks";
+import { PasswordStrengthMeter } from "@/app/components/PasswordStrengthMeter";
+import zxcvbn from "zxcvbn";
 
 export default function RegisterPage() {
   const registration = useRegistration();
   const router = useRouter();
+  const [weakPasswordError, setWeakPasswordError] = useState<string | null>(
+    null
+  );
+
+  // Custom submit handler to check password requirements
+  const handleFormSubmit = (e: React.FormEvent) => {
+    const password = registration.password;
+
+    // Use zxcvbn to check password strength
+    const result = zxcvbn(password);
+
+    // Require at least score 2 (Fair) or higher
+    if (result.score < 2) {
+      e.preventDefault();
+
+      // Show error message based on score
+      const errorMessage =
+        result.score === 0
+          ? "Password is too weak. Please use a stronger password."
+          : "Password is weak. Please add more complexity to make it stronger.";
+
+      setWeakPasswordError(errorMessage);
+
+      // Clear error after 3 seconds
+      setTimeout(() => {
+        setWeakPasswordError(null);
+      }, 3000);
+
+      return;
+    }
+
+    // Clear any previous error
+    setWeakPasswordError(null);
+
+    // Call the original submit handler
+    registration.handleSubmit(e);
+  };
 
   if (registration.jwt) {
     return (
@@ -85,7 +125,7 @@ export default function RegisterPage() {
           <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8">
             {/* Form */}
             <form
-              onSubmit={registration.handleSubmit}
+              onSubmit={handleFormSubmit}
               className="space-y-4 sm:space-y-5"
             >
               {/* Username Field */}
@@ -223,9 +263,12 @@ export default function RegisterPage() {
                     )}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  Use at least 8 characters with a mix of letters and numbers
-                </p>
+
+                {/* Password Strength Meter */}
+                <PasswordStrengthMeter
+                  password={registration.password}
+                  showFeedback={true}
+                />
               </div>
 
               {/* Confirm Password Field */}
@@ -304,6 +347,26 @@ export default function RegisterPage() {
                   </button>
                 </div>
               </div>
+
+              {/* Weak Password Error Message (shows for 3 seconds) */}
+              {weakPasswordError && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg animate-slide-in">
+                  <p className="text-amber-700 text-sm flex items-center gap-2">
+                    <svg
+                      className="w-4 h-4"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {weakPasswordError}
+                  </p>
+                </div>
+              )}
 
               {/* Error Message */}
               {registration.error && (

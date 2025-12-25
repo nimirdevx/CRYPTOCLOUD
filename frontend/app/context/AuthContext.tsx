@@ -7,6 +7,7 @@ import React, {
   ReactNode,
   useEffect,
 } from "react";
+import { setGlobalLogoutHandler } from "@/app/lib/apiError";
 
 // 1. Add 'isInitialized' to the context type
 interface AuthContextType {
@@ -47,6 +48,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsInitialized(true); // Mark as loaded
   }, []);
 
+  const logout = () => {
+    setJwt(null);
+    setEncryptionKey(null);
+    setPrivateKey(null); // <-- ADD THIS
+    setIs2FAEnabled(null);
+    localStorage.removeItem("access_token");
+  };
+
+  // Register global logout handler on mount
+  useEffect(() => {
+    setGlobalLogoutHandler(logout);
+  }, []);
+
   const login = (
     newJwt: string,
     newMasterKey: CryptoKey,
@@ -58,14 +72,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPrivateKey(newPrivateKey); // <-- ADD THIS
     setIs2FAEnabled(newIs2FAEnabled);
     localStorage.setItem("access_token", newJwt);
-  };
-
-  const logout = () => {
-    setJwt(null);
-    setEncryptionKey(null);
-    setPrivateKey(null); // <-- ADD THIS
-    setIs2FAEnabled(null);
-    localStorage.removeItem("access_token");
   };
 
   const unlock = (newMasterKey: CryptoKey, newPrivateKey: CryptoKey) => {

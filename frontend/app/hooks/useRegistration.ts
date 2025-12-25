@@ -47,23 +47,6 @@ export const useRegistration = () => {
     setState((prev) => ({ ...prev, ...updates }));
   }, []);
 
-  // Validate password strength
-  const validatePassword = (password: string): string | null => {
-    if (password.length < 8) {
-      return "Password must be at least 8 characters long";
-    }
-    if (!/[A-Z]/.test(password)) {
-      return "Password must contain at least one uppercase letter";
-    }
-    if (!/[a-z]/.test(password)) {
-      return "Password must contain at least one lowercase letter";
-    }
-    if (!/[0-9]/.test(password)) {
-      return "Password must contain at least one number";
-    }
-    return null;
-  };
-
   // Validate email format
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -85,11 +68,8 @@ export const useRegistration = () => {
         throw new Error("Please enter a valid email address");
       }
 
-      // Validate password strength
-      const passwordError = validatePassword(state.password);
-      if (passwordError) {
-        throw new Error(passwordError);
-      }
+      // Note: Password strength is now validated using zxcvbn in the page component
+      // before calling handleSubmit, so we don't need to validate it here
 
       // Validate password confirmation
       if (state.password !== state.confirmPassword) {

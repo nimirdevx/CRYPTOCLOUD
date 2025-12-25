@@ -13,7 +13,11 @@ export interface UseMySharesResult {
   isFetching: boolean;
   error: string | null;
   isLoading: boolean;
-  fetchMyShares: () => Promise<void>;
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  fetchMyShares: (page?: number) => Promise<void>;
+  goToPage: (page: number) => void;
   revokeShare: (shareId: string) => Promise<void>;
   setError: (error: string | null) => void;
 }
@@ -25,24 +29,34 @@ export const useMyShares = (): UseMySharesResult => {
   const [isFetching, setIsFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const pageSize = 50;
 
   // Fetch my shares
-  const fetchMyShares = useCallback(async () => {
-    if (!jwt) return;
+  const fetchMyShares = useCallback(
+    async (page: number = 1) => {
+      if (!jwt) return;
 
-    setIsFetching(true);
-    setError(null);
+      setIsFetching(true);
+      setError(null);
 
-    try {
-      const service = createShareService(jwt);
-      const data = await service.getSharedByMe();
-      setMyShares(data);
-    } catch (err: any) {
-      setError(err.message || "Failed to fetch your shared files");
-    } finally {
-      setIsFetching(false);
-    }
-  }, [jwt]);
+      try {
+        const service = createShareService(jwt);
+        const data = await service.getSharedByMe(page, pageSize);
+        setMyShares(data.items);
+        setCurrentPage(data.page);
+        setTotalPages(data.total_pages);
+        setTotalItems(data.total);
+      } catch (err: any) {
+        setError(err.message || "Failed to fetch your shared files");
+      } finally {
+        setIsFetching(false);
+      }
+    },
+    [jwt]
+  );
 
   // Revoke share
   const revokeShare = useCallback(
@@ -65,6 +79,16 @@ export const useMyShares = (): UseMySharesResult => {
     [jwt, fetchMyShares]
   );
 
+  // Go to specific page
+  const goToPage = useCallback(
+    (page: number) => {
+      if (page >= 1 && page <= totalPages) {
+        fetchMyShares(page);
+      }
+    },
+    [totalPages, fetchMyShares]
+  );
+
   // Fetch on mount
   useEffect(() => {
     fetchMyShares();
@@ -75,7 +99,11 @@ export const useMyShares = (): UseMySharesResult => {
     isFetching,
     error,
     isLoading,
+    currentPage,
+    totalPages,
+    totalItems,
     fetchMyShares,
+    goToPage,
     revokeShare,
     setError,
   };

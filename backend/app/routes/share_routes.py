@@ -9,6 +9,21 @@ from ..utils.auth import get_current_user
 from ..db import get_user_collection, get_file_collection, get_shared_files_collection
 from motor.motor_asyncio import AsyncIOMotorCollection
 
+# Pagination response models
+class PaginatedSharedFilesResponse(BaseModel):
+    items: List[SharedFileResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+class PaginatedMySharesResponse(BaseModel):
+    items: List[MyShareResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
 router = APIRouter()
 
 @router.get("/users/search", response_model=List[UserSearchResponse])
@@ -89,8 +104,10 @@ async def share_file(
     return {"message": "File shared successfully"}
 
 
-@router.get("/shared-with-me", response_model=List[SharedFileResponse])
+@router.get("/shared-with-me", response_model=PaginatedSharedFilesResponse)
 async def get_shared_with_me(
+    page: int = 1,
+    page_size: int = 50,
     current_user: User = Depends(get_current_user),
     shared_files: AsyncIOMotorCollection = Depends(get_shared_files_collection)
 ):
@@ -99,11 +116,20 @@ async def get_shared_with_me(
     This uses an aggregation pipeline to join data from 3 collections.
     """
     
+    # First, count total documents
+    total_count = await shared_files.count_documents({"recipient_id": current_user.id})
+    
+    # Calculate pagination
+    skip = (page - 1) * page_size
+    total_pages = (total_count + page_size - 1) // page_size
+    
     pipeline = [
         {
             # 1. Find all share records for the current user
             "$match": { "recipient_id": current_user.id }
         },
+        { "$skip": skip },
+        { "$limit": page_size },
         {
             # 2. Join with the 'files' collection to get file details
             "$lookup": {
@@ -140,15 +166,23 @@ async def get_shared_with_me(
     ]
     
     try:
-        results = await shared_files.aggregate(pipeline).to_list(length=None)
-        return results
+        results = await shared_files.aggregate(pipeline).to_list(length=page_size)
+        return PaginatedSharedFilesResponse(
+            items=results,
+            total=total_count,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages
+        )
     except Exception as e:
         print(f"Error in aggregation: {e}")
         raise HTTPException(status_code=500, detail="Could not retrieve shared files")
 
 # --- 2. ADD NEW ENDPOINT: GET /shared-by-me ---    
-@router.get("/shared-by-me", response_model=List[MyShareResponse])
+@router.get("/shared-by-me", response_model=PaginatedMySharesResponse)
 async def get_shared_by_me(
+    page: int = 1,
+    page_size: int = 50,
     current_user: User = Depends(get_current_user),
     files: AsyncIOMotorCollection = Depends(get_file_collection),
     shared_files: AsyncIOMotorCollection = Depends(get_shared_files_collection)
@@ -157,6 +191,29 @@ async def get_shared_by_me(
     Gets all files owned by the current user that have been shared.
     This groups shares by file.
     """
+    
+    # First count: We need to count how many files have shares
+    count_pipeline = [
+        {"$match": { "owner_id": current_user.id }},
+        {
+            "$lookup": {
+                "from": "shared_files",
+                "localField": "_id",
+                "foreignField": "file_id",
+                "as": "shares"
+            }
+        },
+        {"$match": { "shares": { "$ne": [] } }},
+        {"$count": "total"}
+    ]
+    
+    count_result = await files.aggregate(count_pipeline).to_list(length=1)
+    total_count = count_result[0]["total"] if count_result else 0
+    
+    # Calculate pagination
+    skip = (page - 1) * page_size
+    total_pages = (total_count + page_size - 1) // page_size
+    
     pipeline = [
         {
             # 1. Find all files owned by the current user
@@ -175,6 +232,8 @@ async def get_shared_by_me(
             # 3. Filter out files that have no shares
             "$match": { "shares": { "$ne": [] } }
         },
+        { "$skip": skip },
+        { "$limit": page_size },
         {
             # 4. Join with 'users' to get recipient details
             "$lookup": {
@@ -213,8 +272,14 @@ async def get_shared_by_me(
     ]
     
     try:
-        results = await files.aggregate(pipeline).to_list(length=None)
-        return results
+        results = await files.aggregate(pipeline).to_list(length=page_size)
+        return PaginatedMySharesResponse(
+            items=results,
+            total=total_count,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages
+        )
     except Exception as e:
         print(f"Error in aggregation: {e}")
         raise HTTPException(status_code=500, detail="Could not retrieve shared files")

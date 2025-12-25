@@ -14,6 +14,10 @@ export type { UseMySharesResult } from "./useMyShares";
 
 export { useDragAndDrop } from "./useDragAndDrop";
 
+export { useUploadQueue } from "./useUploadQueue";
+export type { UploadItem } from "./useUploadQueue";
+export { UploadStatus } from "./useUploadQueue";
+
 export { useSecurity } from "./useSecurity";
 
 export { useLogin } from "./useLogin";

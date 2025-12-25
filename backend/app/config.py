@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     MAIL_STARTTLS: bool
     MAIL_SSL_TLS: bool
     
+    DEFAULT_STORAGE_QUOTA: int = 5 * 1024 * 1024 * 1024  # 5 GB in bytes (5368709120)
     
     class Config:
         env_file = ".env"

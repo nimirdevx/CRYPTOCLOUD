@@ -47,3 +47,7 @@ class FileMetadataResponse(BaseModel):
     isFolder: bool
     parentId: Optional[str] = None
     encryptedFileKey: Optional[str] = None
+    
+    # Folder statistics
+    calculatedSize: Optional[int] = None  # Total size of folder contents
+    itemCount: Optional[int] = None  # Number of items in folder

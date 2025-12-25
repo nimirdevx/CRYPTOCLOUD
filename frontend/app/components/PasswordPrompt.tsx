@@ -65,21 +65,14 @@ export default function PasswordPrompt() {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fade-in">
-      {/* Animated background elements */}
-      <div className="absolute top-20 right-20 w-64 h-64 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-float"></div>
-      <div
-        className="absolute bottom-20 left-20 w-64 h-64 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-float"
-        style={{ animationDelay: "2s" }}
-      ></div>
-
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
       <form
         onSubmit={handleSubmit}
-        className="relative z-10 glass p-8 rounded-2xl shadow-2xl w-full max-w-md animate-slide-up border border-indigo-500/20"
+        className="relative z-10 bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md animate-scale-up"
       >
         {/* Icon Header */}
         <div className="flex flex-col items-center mb-6">
-          <div className="w-20 h-20 bg-linear-to-br from-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg animate-pulse-glow">
+          <div className="w-20 h-20 bg-linear-to-br from-[#7c5cff] to-[#6b4ce6] rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-[#7c5cff]/30">
             <svg
               className="w-10 h-10 text-white"
               fill="none"
@@ -94,20 +87,20 @@ export default function PasswordPrompt() {
               />
             </svg>
           </div>
-          <h2 className="text-3xl font-bold text-center text-white mb-2">
+          <h2 className="text-3xl font-bold text-center text-gray-900 mb-2">
             Session Locked
           </h2>
-          <p className="text-gray-400 text-center text-sm">
+          <p className="text-[1rem] text-gray-600 text-center">
             Your session has been locked for security
           </p>
         </div>
 
         {/* Info Box */}
-        <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-4 mb-6">
+        <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-5 mb-6">
           <div className="flex items-start gap-3">
             <div className="shrink-0">
               <svg
-                className="w-5 h-5 text-indigo-400"
+                className="w-5 h-5 text-blue-600 mt-0.5"
                 fill="currentColor"
                 viewBox="0 0 20 20"
               >
@@ -118,7 +111,7 @@ export default function PasswordPrompt() {
                 />
               </svg>
             </div>
-            <p className="text-sm text-gray-300">
+            <p className="text-[1rem] text-gray-700 leading-relaxed">
               Enter your password to unlock and decrypt your files. This keeps
               your data secure even if you step away.
             </p>
@@ -127,13 +120,13 @@ export default function PasswordPrompt() {
 
         {/* Password Input */}
         <div className="mb-6">
-          <label className="block mb-2 text-sm font-medium text-gray-300">
+          <label className="block mb-3 text-[1rem] font-semibold text-gray-900">
             Password
           </label>
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+            <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
               <svg
-                className="w-5 h-5 text-gray-500"
+                className="w-5 h-5 text-gray-400"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -150,7 +143,7 @@ export default function PasswordPrompt() {
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full pl-10 pr-10 p-3 bg-gray-700/50 backdrop-blur-sm rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-gray-400 transition-all"
+              className="w-full pl-12 pr-12 py-3.5 bg-white rounded-xl border-2 border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#7c5cff]/20 focus:border-[#7c5cff] text-gray-900 placeholder-gray-400 transition-all text-[1rem]"
               placeholder="Enter your password"
               required
               autoFocus
@@ -158,7 +151,7 @@ export default function PasswordPrompt() {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-300 transition-colors"
+              className="absolute inset-y-0 right-0 flex items-center pr-4 text-gray-400 hover:text-gray-600 transition-colors"
             >
               {showPassword ? (
                 <svg
@@ -201,17 +194,21 @@ export default function PasswordPrompt() {
 
         {/* Error Message */}
         {error && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg animate-slide-in">
-            <p className="text-red-400 text-sm flex items-center gap-2">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+          <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl animate-slide-in">
+            <div className="flex items-start gap-3">
+              <svg
+                className="w-5 h-5 text-red-600 shrink-0 mt-0.5"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
                 <path
                   fillRule="evenodd"
                   d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
                   clipRule="evenodd"
                 />
               </svg>
-              {error}
-            </p>
+              <p className="text-[1rem] text-red-700">{error}</p>
+            </div>
           </div>
         )}
 
@@ -219,7 +216,7 @@ export default function PasswordPrompt() {
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full p-3 bg-linear-to-r from-indigo-600 to-purple-600 rounded-lg font-semibold text-white hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none shadow-lg hover:shadow-indigo-500/50 flex items-center justify-center gap-2 mb-3"
+          className="w-full py-3.5 bg-linear-to-r from-[#7c5cff] to-[#6b4ce6] rounded-xl font-semibold text-white hover:from-[#6b4ce6] hover:to-[#5a3dd5] transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none shadow-lg shadow-[#7c5cff]/30 hover:shadow-[#7c5cff]/40 flex items-center justify-center gap-2 mb-4 text-[1rem]"
         >
           {isLoading ? (
             <>
@@ -250,7 +247,7 @@ export default function PasswordPrompt() {
         <button
           type="button"
           onClick={logout}
-          className="w-full p-2 text-center text-gray-400 text-sm hover:text-white transition-colors flex items-center justify-center gap-2 group"
+          className="w-full py-2.5 text-center text-gray-600 text-[1rem] hover:text-gray-900 transition-colors flex items-center justify-center gap-2 group hover:bg-gray-50 rounded-xl"
         >
           <svg
             className="w-4 h-4"

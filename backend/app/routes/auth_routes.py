@@ -27,6 +27,22 @@ from ..routes.file_routes import recursive_delete # Import the delete helper
 
 router = APIRouter()
 
+# --- Helper function for profile pictures ---
+def generate_profile_picture_presigned_url(s3_key: Optional[str]) -> Optional[str]:
+    """Generate a presigned URL for viewing a profile picture."""
+    if not s3_key:
+        return None
+    try:
+        presigned_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': settings.s3_bucket_name, 'Key': s3_key},
+            ExpiresIn=3600
+        )
+        return presigned_url
+    except Exception as e:
+        print(f"Error generating presigned URL: {e}")
+        return None
+
 # --- 2. ADD Pydantic Models ---
 class TwoFaCode(BaseModel):
     totp_code: str
@@ -42,6 +58,9 @@ class UserKeysResponse(BaseModel):
 
 class DeleteAccountRequest(BaseModel):
     password: str
+
+class UpdateUsernameRequest(BaseModel):
+    new_username: str
     
 class PasswordVerifyRequest(BaseModel):
     password: str
@@ -106,10 +125,17 @@ async def register(user: UserCreate, users: AsyncIOMotorCollection = Depends(get
     new_user = await users.insert_one(new_user_data)
     created_user = await users.find_one({"_id": new_user.inserted_id})
     
+    # Generate presigned URL for profile picture if it exists
+    profile_pic_url = generate_profile_picture_presigned_url(
+        created_user.get("profile_picture_url")
+    )
+    
     return UserResponse(
         id=str(created_user["_id"]), 
-        username=created_user["username"], 
-        is_2fa_enabled=created_user["is_2fa_enabled"]
+        username=created_user["username"],
+        email=created_user["email"],
+        is_2fa_enabled=created_user["is_2fa_enabled"],
+        profile_picture_url=profile_pic_url
     )
 
 
@@ -338,6 +364,41 @@ async def get_user_keys(
         publicKey=user_doc.get("publicKey"),
         encryptedPrivateKey=user_doc.get("encryptedPrivateKey")
     )
+
+@router.get("/me", response_model=UserResponse)
+async def get_current_user_details(current_user: User = Depends(get_current_user)):
+    # Generate presigned URL for profile picture if it exists
+    profile_pic_url = generate_profile_picture_presigned_url(
+        current_user.profile_picture_url
+    )
+    
+    return UserResponse(
+        id=str(current_user.id),
+        username=current_user.username,
+        email=current_user.email,
+        is_2fa_enabled=current_user.is_2fa_enabled,
+        profile_picture_url=profile_pic_url
+    )
+
+@router.put("/me/username", status_code=status.HTTP_204_NO_CONTENT)
+async def update_username(
+    request: UpdateUsernameRequest,
+    current_user: User = Depends(get_current_user),
+    users: AsyncIOMotorCollection = Depends(get_user_collection)
+):
+    new_username = request.new_username
+    # Check if the new username is already taken
+    if await users.find_one({"username": new_username}):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already taken",
+        )
+    
+    await users.update_one(
+        {"_id": current_user.id},
+        {"$set": {"username": new_username}}
+    )
+    return
 
 # --- 4. ADD THE NEW PASSWORD RESET ENDPOINTS ---
 

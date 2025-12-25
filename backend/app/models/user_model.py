@@ -38,6 +38,10 @@ class User(BaseModel):
     encryptedPrivateKey: Optional[str] = None
     
     backup_codes: Optional[List[str]] = None
+    
+    quota: int = 5368709120
+    
+    profile_picture_url: Optional[str] = None  # S3 URL for profile picture
 
     class Config:
         from_attributes = True
@@ -47,4 +51,6 @@ class User(BaseModel):
 class UserResponse(BaseModel):
     id: str
     username: str
+    email: str
     is_2fa_enabled: bool
+    profile_picture_url: Optional[str] = None

@@ -15,4 +15,10 @@ export {
   getStorageColor,
   isValidFileSize,
   formatProgress,
-} from './format';
+} from "./format";
+
+export {
+  formatDate as formatRelativeDate,
+  getFileType,
+  getFileIcon as getFileIconType,
+} from "./fileHelpers";

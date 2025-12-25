@@ -14,15 +14,15 @@ export const RevokeConfirmationModal = ({
   onCancel,
 }: RevokeConfirmationModalProps) => {
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
       <div
-        className="glass max-w-md w-full p-6 rounded-2xl shadow-2xl animate-scale-up border border-orange-500/20"
+        className="bg-white max-w-md w-full p-8 rounded-2xl shadow-2xl animate-scale-up"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Warning Icon */}
-        <div className="w-16 h-16 bg-orange-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+        <div className="w-16 h-16 bg-orange-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
           <svg
-            className="w-8 h-8 text-orange-400"
+            className="w-8 h-8 text-orange-600"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -37,30 +37,32 @@ export const RevokeConfirmationModal = ({
         </div>
 
         {/* Title */}
-        <h3 className="text-xl font-bold text-white text-center mb-2">
+        <h3 className="text-2xl font-bold text-gray-900 text-center mb-3">
           Revoke Share Access?
         </h3>
 
         {/* Message */}
-        <div className="bg-white/5 rounded-lg p-4 mb-4 border border-white/10">
-          <p className="text-gray-300 text-sm text-center mb-2">
+        <div className="bg-orange-50 rounded-xl p-5 mb-4 border-2 border-orange-200">
+          <p className="text-[1rem] text-gray-700 text-center mb-3">
             You are about to revoke access for:
           </p>
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center">
-              <span className="text-white text-sm font-medium">
+          <div className="flex items-center justify-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-linear-to-br from-[#7c5cff] to-[#6b4ce6] rounded-full flex items-center justify-center">
+              <span className="text-white text-sm font-bold">
                 {recipientUsername.charAt(0).toUpperCase()}
               </span>
             </div>
-            <p className="text-white font-semibold">{recipientUsername}</p>
+            <p className="text-[1rem] font-bold text-gray-900">
+              {recipientUsername}
+            </p>
           </div>
-          <p className="text-gray-400 text-sm text-center">
+          <p className="text-[1rem] text-gray-700 text-center">
             from accessing{" "}
-            <span className="text-white font-medium">"{filename}"</span>
+            <span className="font-semibold text-gray-900">"{filename}"</span>
           </p>
         </div>
 
-        <p className="text-gray-400 text-sm text-center mb-6">
+        <p className="text-[1rem] text-gray-600 text-center mb-8">
           They will no longer be able to view or download this file. This action
           cannot be undone.
         </p>
@@ -70,24 +72,24 @@ export const RevokeConfirmationModal = ({
           <button
             onClick={onCancel}
             disabled={isLoading}
-            className="flex-1 px-4 py-2.5 font-semibold text-white glass-light rounded-lg hover:bg-gray-600/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="flex-1 px-5 py-3 font-semibold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             disabled={isLoading}
-            className="flex-1 px-4 py-2.5 font-semibold text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+            className="flex-1 px-5 py-3 font-semibold text-white bg-orange-600 rounded-xl hover:bg-orange-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-orange-600/20"
           >
             {isLoading ? (
               <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 <span>Revoking...</span>
               </>
             ) : (
               <>
                 <svg
-                  className="w-4 h-4"
+                  className="w-5 h-5"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
