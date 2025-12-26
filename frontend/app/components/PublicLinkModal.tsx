@@ -82,21 +82,28 @@ export default function PublicLinkModal({
     }
   };
 
-  const buildPublicUrl = async (
+const buildPublicUrl = async (
     token: string,
     fileKey: CryptoKey
   ): Promise<string> => {
-    // Export the CryptoKey to raw format, then base64 encode
+    // 1. Export the CryptoKey to raw format
     const keyBuffer = await crypto.subtle.exportKey("raw", fileKey);
     const keyArray = new Uint8Array(keyBuffer);
     const keyString = String.fromCharCode(...keyArray);
-    const keyBase64 = btoa(keyString);
+    
+    // 2. Convert to Base64
+    const base64 = btoa(keyString);
 
-    // URL-encode the key to preserve + and / characters
-    const encodedKey = encodeURIComponent(keyBase64);
+    // 3. Convert to URL-Safe Base64 (MATCHING copyLinkUtils logic)
+    // Replace + with -, / with _, and remove = padding
+    const urlSafeKey = base64
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=/g, "");
 
+    // 4. Construct URL (No encodeURIComponent needed for URL-safe chars)
     const baseUrl = window.location.origin;
-    return `${baseUrl}/share/${token}#key=${encodedKey}`;
+    return `${baseUrl}/share/${token}#key=${urlSafeKey}`;
   };
 
   const handleCopy = async () => {

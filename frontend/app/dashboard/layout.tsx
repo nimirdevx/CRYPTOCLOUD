@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { useRouter, usePathname } from "next/navigation";
 import PasswordPrompt from "../components/PasswordPrompt";
 import Avatar from "../components/Avatar";
+import { MobileBottomNav } from "../components/MobileBottomNav";
 import { API_URL } from "../config/constants";
 import type { User } from "../types";
 
@@ -111,8 +112,9 @@ export default function DashboardLayout({
 
   return (
     <div className="w-screen h-screen bg-[#F4F5F7] overflow-hidden">
-      <div className="flex w-full h-full p-4 gap-4">
-        <aside className="w-24 bg-white rounded-3xl shadow-sm border border-slate-100 p-4 flex flex-col items-center gap-5">
+      <div className="flex w-full h-full lg:p-4 md:p-3 p-0 lg:gap-4 md:gap-3 gap-0">
+        {/* Desktop/Tablet Sidebar - Hidden on mobile */}
+        <aside className="hidden lg:flex lg:w-24 md:flex md:w-16 bg-white lg:rounded-3xl md:rounded-2xl shadow-sm border border-slate-100 lg:p-4 md:p-2 flex-col items-center lg:gap-5 md:gap-3">
           <button
             onClick={() => handleViewChange("profile")}
             className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${
@@ -120,6 +122,7 @@ export default function DashboardLayout({
                 ? "bg-[#7c5cff]/10 text-[#7c5cff]"
                 : "text-slate-600 hover:bg-slate-100"
             }`}
+            title="Profile"
           >
             <Avatar
               username={currentUser?.username}
@@ -131,7 +134,9 @@ export default function DashboardLayout({
                   : ""
               }
             />
-            <span className="text-xs font-medium">Profile</span>
+            <span className="lg:block md:hidden text-xs font-medium">
+              Profile
+            </span>
           </button>
 
           <button
@@ -141,16 +146,17 @@ export default function DashboardLayout({
                 ? "bg-[#7c5cff]/10 text-[#7c5cff]"
                 : "text-slate-600 hover:bg-slate-100"
             }`}
+            title="My files"
           >
             <div
-              className={`w-10 h-10 rounded-full flex items-center justify-center ${
+              className={`lg:w-10 lg:h-10 md:w-8 md:h-8 rounded-full flex items-center justify-center ${
                 currentView === "files"
                   ? "bg-[#7c5cff] text-white"
                   : "bg-slate-100 text-slate-600"
               }`}
             >
               <svg
-                className="w-5 h-5"
+                className="lg:w-5 lg:h-5 md:w-4 md:h-4"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -163,7 +169,9 @@ export default function DashboardLayout({
                 />
               </svg>
             </div>
-            <span className="text-xs font-medium">My files</span>
+            <span className="lg:block md:hidden text-xs font-medium">
+              My files
+            </span>
           </button>
 
           <button
@@ -173,16 +181,17 @@ export default function DashboardLayout({
                 ? "bg-[#7c5cff]/10 text-[#7c5cff]"
                 : "text-slate-600 hover:bg-slate-100"
             }`}
+            title="Shared"
           >
             <div
-              className={`w-10 h-10 rounded-full flex items-center justify-center ${
+              className={`lg:w-10 lg:h-10 md:w-8 md:h-8 rounded-full flex items-center justify-center ${
                 currentView === "shared"
                   ? "bg-[#7c5cff] text-white"
                   : "bg-slate-100 text-slate-600"
               }`}
             >
               <svg
-                className="w-5 h-5"
+                className="lg:w-5 lg:h-5 md:w-4 md:h-4"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -195,7 +204,9 @@ export default function DashboardLayout({
                 />
               </svg>
             </div>
-            <span className="text-xs font-medium">Shared</span>
+            <span className="lg:block md:hidden text-xs font-medium">
+              Shared
+            </span>
           </button>
 
           <div className="flex-1" />
@@ -206,10 +217,11 @@ export default function DashboardLayout({
               router.push("/auth/login");
             }}
             className="flex flex-col items-center gap-1 p-2 rounded-xl text-slate-600 hover:bg-slate-100 transition-all"
+            title="Log out"
           >
-            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+            <div className="lg:w-10 lg:h-10 md:w-8 md:h-8 rounded-full bg-slate-100 flex items-center justify-center">
               <svg
-                className="w-5 h-5"
+                className="lg:w-5 lg:h-5 md:w-4 md:h-4"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -222,12 +234,21 @@ export default function DashboardLayout({
                 />
               </svg>
             </div>
-            <span className="text-xs font-medium">Log out</span>
+            <span className="lg:block md:hidden text-xs font-medium">
+              Log out
+            </span>
           </button>
         </aside>
 
         {children}
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      <MobileBottomNav
+        currentView={currentView}
+        onViewChange={handleViewChange}
+        currentUser={currentUser}
+      />
     </div>
   );
 }

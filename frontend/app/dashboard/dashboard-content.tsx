@@ -5,10 +5,14 @@ import type React from "react";
 import { useState, useRef, useEffect } from "react";
 import { useFileManager } from "@/app/hooks/useFileManager";
 import { useUploadQueue } from "@/app/hooks/useUploadQueue";
-import { Folder } from "lucide-react";
+import { useAuth } from "@/app/context/AuthContext";
+import { Folder, Search, Info } from "lucide-react";
 import { ShareModal } from "@/app/components/ShareModal";
 import { PreviewModal } from "@/app/components/PreviewModal";
 import { DeleteConfirmationModal } from "@/app/components/DeleteConfirmationModal";
+import PublicLinkModal from "@/app/components/PublicLinkModal";
+import { FloatingActionButton } from "@/app/components/FloatingActionButton";
+import { MobileDetailsSheet } from "@/app/components/MobileDetailsSheet";
 import UploadQueuePanel from "@/app/components/UploadQueuePanel";
 import {
   DetailsPanel,
@@ -23,6 +27,7 @@ import {
 } from "@/app/components/FileManager";
 
 export default function DashboardContent() {
+  const { encryptionKey } = useAuth();
   const {
     files,
     storageUsage,
@@ -82,6 +87,7 @@ export default function DashboardContent() {
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showPublicLinkModal, setShowPublicLinkModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
   const [previewFilename, setPreviewFilename] = useState("");
@@ -97,6 +103,9 @@ export default function DashboardContent() {
   const [allFolders, setAllFolders] = useState<any[]>([]);
   const [currentFolderMetadata, setCurrentFolderMetadata] = useState<any>(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [showDetailsPanel, setShowDetailsPanel] = useState(false);
+  const [showMobileDetailsSheet, setShowMobileDetailsSheet] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const prevSearchQuery = useRef<string>("");
 
@@ -528,6 +537,14 @@ export default function DashboardContent() {
     setOpenDropdownId(null);
   };
 
+  const handleCopyLinkFromDropdown = async (file: any) => {
+    if (!file.isFolder) {
+      setSelectedFileMetadata(file);
+      setShowPublicLinkModal(true);
+    }
+    setOpenDropdownId(null);
+  };
+
   const handlePreviewFromDropdown = async (file: any) => {
     if (!file.isFolder) {
       try {
@@ -558,31 +575,47 @@ export default function DashboardContent() {
   };
 
   return (
-    <div className="flex-1 flex flex-col gap-6 overflow-hidden">
+    <div className="flex-1 flex flex-col lg:gap-6 md:gap-4 gap-3 overflow-hidden md:pb-0 pb-0">
+
+      <div className="lg:hidden md:hidden  px-3 pt-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-2xl font-bold text-gray-900">My Files</h3>
+          <Folder className="w-8 h-8 text-[#7c5cff]" />
+        </div>
+      </div>
       {/* Header Row: Title, Search Bar, Icon */}
-      <div className="flex items-center gap-4 px-2 pt-6 shrink-0">
-        {/* Left: My Files Title */}
-        <h1 className="text-[2.5rem] leading-12 font-bold text-gray-900 w-64">
+      <div className="flex items-center gap-2 lg:gap-4 md:gap-3 lg:px-2 md:px-2 px-3 lg:pt-6 md:pt-4 pt-3 shrink-0">
+        {/* Left: My Files Title - Hidden on mobile, shown on tablet+ */}
+        <h1 className="hidden md:block lg:text-[2.5rem] md:text-[2rem] leading-tight font-bold text-gray-900 lg:w-64 md:w-48">
           My files
         </h1>
 
-        {/* Center: Search Bar */}
-        <SearchBar
-          value={searchQuery}
-          onChange={setSearchQuery}
-          isSearching={isSearching}
-        />
+        {/* Search Bar - Full on all screens */}
+        <div className="flex-1">
+          <SearchBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            isSearching={isSearching}
+          />
+        </div>
 
-        {/* Right: Folder Icon */}
-        <div className="w-72 flex justify-end">
-          <Folder className="w-10 h-10 text-[#7c5cff]" />
+        {/* Right: Info button (md) or Folder Icon (lg+) */}
+        <div className="hidden md:flex lg:w-72 md:w-auto justify-end items-center gap-2">
+          <button
+            onClick={() => setShowDetailsPanel(!showDetailsPanel)}
+            className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Toggle details panel"
+          >
+            <Info className="w-6 h-6 text-[#7c5cff]" />
+          </button>
+          <Folder className="hidden lg:block w-10 h-10 text-[#7c5cff]" />
         </div>
       </div>
 
       {/* Main content area with three columns */}
-      <div className="flex-1 flex gap-4 min-h-0 overflow-hidden">
-        {/* Column 1: Folder Tree */}
-        <div className="w-64 flex flex-col gap-4 shrink-0">
+      <div className="flex-1 flex lg:gap-4 md:gap-3 gap-0 min-h-0 overflow-hidden">
+        {/* Column 1: Folder Tree - Hidden on mobile */}
+        <div className="hidden md:flex lg:w-64 md:w-48 flex-col gap-4 shrink-0">
           <FileToolbar
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
@@ -649,6 +682,7 @@ export default function DashboardContent() {
           onDownloadFromDropdown={handleDownloadFromDropdown}
           onRenameFromDropdown={handleRenameFromDropdown}
           onShareFromDropdown={handleShareFromDropdown}
+          onCopyLinkFromDropdown={handleCopyLinkFromDropdown}
           onDeleteFromDropdown={handleDeleteFromDropdown}
           onNavigateToFolder={navigateToFolder}
           currentPage={currentPage}
@@ -664,15 +698,42 @@ export default function DashboardContent() {
           onFolderDrop={handleFolderDrop}
           onFolderDragOver={handleFolderDragOver}
           onFolderDragLeave={handleFolderDragLeave}
+          onShowMobileDetails={(file) => {
+            setSelectedFileMetadata(file);
+            setShowMobileDetailsSheet(true);
+          }}
         />
 
-        {/* Column 3: Details Panel */}
-        <DetailsPanel
-          selectedFileMetadata={selectedFileMetadata}
-          currentFolderMetadata={currentFolderMetadata}
-          storageUsage={storageUsage}
-        />
+        {/* Column 3: Details Panel - Visible on lg, toggleable on md, hidden on mobile */}
+        <div
+          className={`hidden ${
+            showDetailsPanel ? "md:block" : "lg:block"
+          } transition-all duration-300`}
+        >
+          <DetailsPanel
+            selectedFileMetadata={selectedFileMetadata}
+            currentFolderMetadata={currentFolderMetadata}
+            storageUsage={storageUsage}
+          />
+        </div>
       </div>
+
+      {/* Mobile FAB */}
+      <FloatingActionButton
+        onUploadClick={() => fileInputRef.current?.click()}
+        onNewFolderClick={() => setShowNewFolderModal(true)}
+      />
+
+      {/* Mobile Details Sheet */}
+      <MobileDetailsSheet
+        isOpen={showMobileDetailsSheet}
+        file={selectedFileMetadata}
+        onClose={() => setShowMobileDetailsSheet(false)}
+        onDownload={handleDownload}
+        onRename={handleRename}
+        onShare={handleShare}
+        onDelete={handleDelete}
+      />
 
       {/* New Folder Modal */}
       <NewFolderModal
@@ -708,6 +769,17 @@ export default function DashboardContent() {
         />
       )}
 
+      {/* Public Link Modal */}
+      {showPublicLinkModal && selectedFileMetadata && (
+        <PublicLinkModal
+          isOpen={showPublicLinkModal}
+          onClose={() => setShowPublicLinkModal(false)}
+          fileId={selectedFileMetadata.id}
+          filename={selectedFileMetadata.filename}
+          encryptedFileKey={selectedFileMetadata.encryptedFileKey}
+        />
+      )}
+
       {/* Preview Modal */}
       {showPreviewModal && (
         <PreviewModal
@@ -721,6 +793,7 @@ export default function DashboardContent() {
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
         <DeleteConfirmationModal
+          isOpen={showDeleteModal}
           file={fileToDelete}
           isLoading={isDeleting}
           onConfirm={handleConfirmDelete}
